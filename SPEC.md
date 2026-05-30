@@ -23,6 +23,10 @@ SGP is designed to support:
 
 ## Core Concepts
 
+SGP provides graph primitives for append, rewrite, and resumption. It does not perform semantic
+compaction itself. Harnesses are responsible for deciding branch points, merge tips, and rewrite
+content.
+
 ### Message (Node)
 
 The atomic unit of the graph is a message: a single entry in the inference message array (`system`,
@@ -201,6 +205,136 @@ branch tips folded into the rewrite.
 ```
 
 Emitted once when the session terminates. `terminal_node_id` is the HEAD at termination.
+
+## Communication Patterns (Non-Normative)
+
+The following diagrams are implementation guidance for how orchestrators and harnesses commonly
+transport and persist SGP events.
+
+### Baseline OAC + SGP Runtime Flow
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant H as Harness (in OAC container)
+  participant O as Orchestrator
+  participant S as SGP Store
+  participant G as Inference Gateway
+  participant T as Tool/MCP
+
+  U->>H: Prompt
+  H->>O: session.start(session_id)
+  O->>S: Load(session_id)
+  S-->>O: prior graph or empty
+  O-->>H: resume state (optional)
+
+  H->>H: Append(system/user)
+  H->>O: node.appended(system/user)
+
+  H->>G: inference request (ResumeMessages lineage)
+  G-->>H: assistant tool_use
+  H->>H: Append(assistant tool_use)
+  H->>O: node.appended(assistant)
+
+  H->>T: tool call
+  T-->>H: tool result
+  H->>H: Append(tool)
+  H->>O: node.appended(tool)
+
+  H->>G: inference continue
+  G-->>H: assistant final
+  H->>H: Append(assistant final)
+  H->>O: node.appended(assistant final)
+
+  H->>O: session.ended(terminal_node_id)
+  O->>S: Save(snapshot or event-applied graph)
+```
+
+### Optional Broker Fanout
+
+```mermaid
+flowchart LR
+  subgraph Runtime Plane
+    H1[Harness A]
+    H2[Harness B]
+    O[Orchestrator]
+  end
+
+  subgraph Durable State
+    DB[(SGP Store)]
+  end
+
+  subgraph Optional Fanout
+    B[(Broker: NATS/Kafka)]
+    IDX[Search/Analytics]
+    OBS[Observability Pipeline]
+  end
+
+  H1 -- ConnectRPC bidi stream<br/>SGP events by session_id --> O
+  H2 -- ConnectRPC bidi stream<br/>SGP events by session_id --> O
+  O -- Save/Load graph snapshots<br/>or apply events --> DB
+  O -- Republish normalized SGP events --> B
+  B --> IDX
+  B --> OBS
+```
+
+### Resume After Interruption
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant H as Harness
+  participant O as Orchestrator
+  participant S as SGP Store
+  participant G as Inference Gateway
+
+  Note over H,O: Prior run interrupted after tool node and no assistant child yet
+
+  H->>O: reconnect(session_id)
+  O->>S: Load(session_id)
+  S-->>O: graph with dangling leaf, role tool
+  O-->>H: graph/head state
+
+  H->>H: NeedsResponse(head) returns true
+  H->>H: ResumeMessages(head)
+
+  H->>G: inference with canonical lineage
+  G-->>H: assistant continuation
+
+  H->>H: Append(assistant)
+  H->>O: node.appended(assistant)
+  O->>S: Save(updated graph)
+```
+
+### Rewrite + Condensation Lifecycle
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant H as Harness
+  participant SG as SGP Graph
+  participant O as Orchestrator
+  participant S as Store
+
+  H->>SG: Append(branch-1 messages)
+  H->>SG: Append(branch-2 messages)
+  H->>SG: Rewrite(parentID, synthesizedFrom...)
+  SG-->>H: history.rewritten node
+  H->>O: history.rewritten event
+
+  H->>SG: TriggerCondensation(ToolCallSequenceCompleted)
+  alt CondenseDecision.Condense == true
+    SG-->>H: history.rewritten condensed node
+    H->>O: history.rewritten event (condensed)
+  else CondenseDecision.Condense == false
+    SG-->>H: no-op
+  end
+
+  H->>SG: TriggerCondensation(BeforePersist)
+  H->>O: flush buffered events
+  O->>S: Save(snapshot)
+```
 
 ## Examples
 

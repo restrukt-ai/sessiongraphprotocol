@@ -3,7 +3,6 @@ package sessiongraphprotocol
 import (
 	"errors"
 	"fmt"
-	"slices"
 	"sync"
 	"time"
 
@@ -31,6 +30,7 @@ type config struct {
 	eventNames  EventNames
 	sessionID   ID
 	spawnedFrom *SpawnReference
+	condensers  map[CondenseTrigger]Condenser
 }
 
 // Option configures a Graph.
@@ -87,6 +87,7 @@ type Graph struct {
 	eventNames     EventNames
 	clock          Clock
 	idGenerator    IDGenerator
+	condensers     map[CondenseTrigger]Condenser
 	nodes          map[ID]Node
 	children       map[ID][]ID
 	events         []Event
@@ -124,6 +125,7 @@ func NewGraph(options ...Option) *Graph {
 		eventNames:  cfg.eventNames,
 		clock:       cfg.clock,
 		idGenerator: cfg.idGenerator,
+		condensers:  copyCondensers(cfg.condensers),
 		nodes:       make(map[ID]Node),
 		children:    make(map[ID][]ID),
 	}
@@ -342,7 +344,8 @@ func (graph *Graph) appendNode(
 		Metadata:        copyMetadata(metadata),
 	}
 
-	graph.nodes[node.ID] = copyNode(node)
+	// Store the canonical node directly; callers only receive copies via accessors/events.
+	graph.nodes[node.ID] = node
 	for _, parentID := range node.ParentIDs {
 		graph.children[parentID] = append(graph.children[parentID], node.ID)
 	}
@@ -363,6 +366,23 @@ func (graph *Graph) appendNode(
 }
 
 func (graph *Graph) validateNodeReferences(ids []ID) ([]ID, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	if len(ids) == 1 {
+		nodeID := ids[0]
+		if nodeID == "" {
+			return nil, errors.New("node reference cannot be empty")
+		}
+
+		if _, exists := graph.nodes[nodeID]; !exists {
+			return nil, fmt.Errorf("%w: %s", ErrNodeNotFound, nodeID)
+		}
+
+		return []ID{nodeID}, nil
+	}
+
 	validated := make([]ID, 0, len(ids))
 	seen := make(map[ID]struct{}, len(ids))
 
@@ -392,7 +412,8 @@ func (graph *Graph) resumeNodes(nodeID ID) ([]Node, error) {
 		return nil, fmt.Errorf("%w: %s", ErrNodeNotFound, nodeID)
 	}
 
-	lineage := []Node{copyNode(node)}
+	path := make([]ID, 0, 8)
+	path = append(path, node.ID)
 	current := node
 
 	for len(current.ParentIDs) != 0 {
@@ -402,11 +423,14 @@ func (graph *Graph) resumeNodes(nodeID ID) ([]Node, error) {
 			return nil, fmt.Errorf("%w: %s", ErrNodeNotFound, parentID)
 		}
 
-		lineage = append(lineage, copyNode(parent))
+		path = append(path, parent.ID)
 		current = parent
 	}
 
-	slices.Reverse(lineage)
+	lineage := make([]Node, len(path))
+	for i, idx := len(path)-1, 0; i >= 0; i, idx = i-1, idx+1 {
+		lineage[idx] = copyNode(graph.nodes[path[i]])
+	}
 
 	return lineage, nil
 }
@@ -416,12 +440,24 @@ func requiresResponse(role MessageRole) bool {
 }
 
 func copyNode(node Node) Node {
+	var parentIDs []ID
+	if len(node.ParentIDs) != 0 {
+		parentIDs = make([]ID, len(node.ParentIDs))
+		copy(parentIDs, node.ParentIDs)
+	}
+
+	var synthesizedFrom []ID
+	if len(node.SynthesizedFrom) != 0 {
+		synthesizedFrom = make([]ID, len(node.SynthesizedFrom))
+		copy(synthesizedFrom, node.SynthesizedFrom)
+	}
+
 	return Node{
 		ID:              node.ID,
 		SessionID:       node.SessionID,
 		Timestamp:       node.Timestamp,
-		ParentIDs:       append([]ID(nil), node.ParentIDs...),
-		SynthesizedFrom: append([]ID(nil), node.SynthesizedFrom...),
+		ParentIDs:       parentIDs,
+		SynthesizedFrom: synthesizedFrom,
 		Message:         node.Message,
 		Metadata:        copyMetadata(node.Metadata),
 	}
@@ -463,20 +499,12 @@ func copyEvent(event Event) Event {
 }
 
 func copyEvents(events []Event) []Event {
-	cloned := make([]Event, 0, len(events))
-	for _, event := range events {
-		cloned = append(cloned, copyEvent(event))
+	cloned := make([]Event, len(events))
+	for i, event := range events {
+		cloned[i] = copyEvent(event)
 	}
 
 	return cloned
-}
-
-func copyNodeValue(node *Node) Node {
-	if node == nil {
-		return Node{}
-	}
-
-	return copyNode(*node)
 }
 
 func copyNodePointer(node *Node) *Node {

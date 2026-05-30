@@ -30,6 +30,7 @@ The Go package currently provides:
 - typed SGP data structures such as `Session`, `Node`, `Message`, and `Event`,
 - an in-memory `Graph` API for building and resuming sessions,
 - configurable event names through `EventKind` and `EventNames`,
+- trigger-based context condensation hooks for harness-managed summarization,
 - a persistence `Store` interface for pluggable backends,
 - snapshot versioning and upgrade support,
 - and a flat JSON file store for local disk persistence.
@@ -132,6 +133,63 @@ graph := sgp.NewGraph(
 
 This lets you keep call sites stable even if the wire-format event strings change later.
 
+## Context Condensation
+
+The package supports trigger-based context condensation while keeping condensation semantics in the
+harness (where model/prompt/tool specifics live).
+
+SGP itself does not perform semantic compaction and does not pick rewrite parents or merge sources.
+The harness decides what to condense, where to branch from, and which tips to synthesize.
+
+### Condensation Triggers
+
+The graph exposes typed triggers instead of hard-coded strings:
+
+- `CondenseTriggerManual`
+- `CondenseTriggerToolCallSequenceCompleted`
+- `CondenseTriggerBeforePersist`
+
+Register a condenser for a trigger with `WithCondenser`, then invoke it with
+`TriggerCondensation` when your harness reaches that lifecycle point.
+When `CondenseDecision.Condense` is true, the harness must provide both `ParentID` and
+`SynthesizedFrom`; Graph only validates and appends the resulting rewrite node.
+
+```go
+graph := sgp.NewGraph(
+	sgp.WithCondenser(
+		sgp.CondenseTriggerToolCallSequenceCompleted,
+		func(input sgp.CondenseInput) (sgp.CondenseDecision, error) {
+			// Harness decides if and how to condense.
+			if len(input.Lineage) < 6 {
+				return sgp.CondenseDecision{Condense: false}, nil
+			}
+
+			return sgp.CondenseDecision{
+				Condense:        true,
+				ParentID:        input.Lineage[1].ID,
+				SynthesizedFrom: []sgp.ID{input.Lineage[len(input.Lineage)-2].ID, input.Head.ID},
+				Message: sgp.Message{
+					Role:    sgp.MessageRoleAssistant,
+					Content: "Summarized tool-call sequence.",
+				},
+				Metadata: map[string]any{"strategy": "tool-batch-summary"},
+			}, nil
+		},
+	),
+)
+
+node, event, condensed, err := graph.TriggerCondensation(
+	sgp.CondenseTriggerToolCallSequenceCompleted,
+)
+_ = node
+_ = event
+_ = condensed
+_ = err
+```
+
+When condensation is applied, SGP records it as a `history.rewritten` event/node with
+`synthesized_from` provenance.
+
 ## Persistence Interface
 
 Persistence is intentionally abstracted behind a small interface so orchestrators and operators can store session graphs in any backing system they choose.
@@ -215,9 +273,161 @@ The normal integration pattern is:
 3. The orchestrator or operator persists the graph through a `Store` implementation.
 4. On restart or failover, the harness loads the graph, checks the head, and reconstructs the canonical message history through `ResumeMessages`.
 5. If the head is a dangling `user` or `tool` leaf, the harness re-submits inference rather than replaying already-finished work.
+6. At relevant harness lifecycle points (for example after multi-tool-call sequences), the harness may call `TriggerCondensation` for its configured trigger.
+
+## Communication Patterns
+
+### Baseline OAC + SGP Runtime Flow
+
+```mermaid
+sequenceDiagram
+	autonumber
+	participant U as User
+	participant H as Harness (in OAC container)
+	participant O as Orchestrator
+	participant S as SGP Store
+	participant G as Inference Gateway
+	participant T as Tool/MCP
+
+	U->>H: Prompt
+	H->>O: session.start(session_id)
+	O->>S: Load(session_id)
+	S-->>O: prior graph or empty
+	O-->>H: resume state (optional)
+
+	H->>H: Append(system/user)
+	H->>O: node.appended(system/user)
+
+	H->>G: inference request (ResumeMessages lineage)
+	G-->>H: assistant tool_use
+	H->>H: Append(assistant tool_use)
+	H->>O: node.appended(assistant)
+
+	H->>T: tool call
+	T-->>H: tool result
+	H->>H: Append(tool)
+	H->>O: node.appended(tool)
+
+	H->>G: inference continue
+	G-->>H: assistant final
+	H->>H: Append(assistant final)
+	H->>O: node.appended(assistant final)
+
+	H->>O: session.ended(terminal_node_id)
+	O->>S: Save(snapshot or event-applied graph)
+```
+
+### Optional Broker Fanout
+
+```mermaid
+flowchart LR
+	subgraph Runtime Plane
+		H1[Harness A]
+		H2[Harness B]
+		O[Orchestrator]
+	end
+
+	subgraph Durable State
+		DB[(SGP Store)]
+	end
+
+	subgraph Optional Fanout
+		B[(Broker: NATS/Kafka)]
+		IDX[Search/Analytics]
+		OBS[Observability Pipeline]
+	end
+
+	H1 -- ConnectRPC bidi stream<br/>SGP events by session_id --> O
+	H2 -- ConnectRPC bidi stream<br/>SGP events by session_id --> O
+	O -- Save/Load graph snapshots<br/>or apply events --> DB
+	O -- Republish normalized SGP events --> B
+	B --> IDX
+	B --> OBS
+```
+
+### Resume After Interruption
+
+```mermaid
+sequenceDiagram
+	autonumber
+	participant H as Harness
+	participant O as Orchestrator
+	participant S as SGP Store
+	participant G as Inference Gateway
+
+	Note over H,O: Prior run interrupted after tool node and no assistant child yet
+
+	H->>O: reconnect(session_id)
+	O->>S: Load(session_id)
+	S-->>O: graph with dangling leaf, role tool
+	O-->>H: graph/head state
+
+	H->>H: NeedsResponse(head) returns true
+	H->>H: ResumeMessages(head)
+
+	H->>G: inference with canonical lineage
+	G-->>H: assistant continuation
+
+	H->>H: Append(assistant)
+	H->>O: node.appended(assistant)
+	O->>S: Save(updated graph)
+```
+
+### Rewrite + Condensation Lifecycle
+
+```mermaid
+sequenceDiagram
+	autonumber
+	participant H as Harness
+	participant SG as SGP Graph
+	participant O as Orchestrator
+	participant S as Store
+
+	H->>SG: Append(branch-1 messages)
+	H->>SG: Append(branch-2 messages)
+	H->>SG: Rewrite(parentID, synthesizedFrom...)
+	SG-->>H: history.rewritten node
+	H->>O: history.rewritten event
+
+	H->>SG: TriggerCondensation(ToolCallSequenceCompleted)
+	alt CondenseDecision.Condense == true
+		SG-->>H: history.rewritten condensed node
+		H->>O: history.rewritten event (condensed)
+	else CondenseDecision.Condense == false
+		SG-->>H: no-op
+	end
+
+	H->>SG: TriggerCondensation(BeforePersist)
+	H->>O: flush buffered events
+	O->>S: Save(snapshot)
+```
+
+### Git-Tree Rewrite Mental Model
+
+```mermaid
+flowchart TD
+	A["A system"] --> B["B user"] --> C["C assistant"] --> D["D tool_use X"] --> E["E tool_result X"] --> F0["F assistant tool_use Y"] --> G["G tool_result Y"] --> H["H assistant verbose draft"]
+
+	C --> P1["P1 branch analysis"]
+	P1 --> P2["P2 branch tip"]
+	C --> Q1["Q1 alternate branch"]
+	Q1 --> Q2["Q2 alternate tip"]
+
+	C --> R["R history.rewritten condensed summary"]
+	R --> I["I assistant next turn canonical HEAD"]
+
+	H -. "replaced span audit" .-> R
+	P2 -. "synthesized_from" .-> R
+	Q2 -. "synthesized_from" .-> R
+	G -. "condensed into R" .-> R
+```
+
+This is analogous to squashing a long section of history into one compact commit.
+After rewrite, canonical resume follows `A -> B -> C -> R -> I`, while the long prior
+span (`D..H`) and branch tips (`P2`, `Q2`) remain queryable as audit provenance.
 
 ## Status
 
 The package currently focuses on the protocol model, in-memory graph operations, persistence abstractions, and a local JSON backend. It does not prescribe a network protocol, database schema, or orchestrator runtime.
 
-See [SGP.md](./SGP.md) for the protocol document and [sgp.spec.md](./sgp.spec.md) for the local summary.
+See [SGP.md](./SGP.md) for the protocol document.
