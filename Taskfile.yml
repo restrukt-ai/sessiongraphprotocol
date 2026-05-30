@@ -1,0 +1,79 @@
+version: "3"
+
+vars:
+  BIN_DIR: bin
+
+env:
+  GOEXPERIMENT: jsonv2
+
+tasks:
+  build:
+    desc: Build all binaries
+    deps: [build:sgp]
+
+  build:sgp:
+    desc: Build the sgp binary
+    cmds:
+      - go build -o {{.BIN_DIR}}/sgp ./cmd/sgp
+    sources:
+      - cmd/sgp/**/*.go
+      - pkg/**/*.go
+    generates:
+      - "{{.BIN_DIR}}/sgp"
+
+  test:
+    desc: Run tests with race detector
+    cmds:
+      - go test -race ./...
+
+  lint:
+    desc: Run all linters
+    cmds:
+      - task: lint:golangci-lint
+      - task: lint:govulncheck
+      - task: lint:nilaway
+      - task: lint:go-arch-lint
+
+  lint:golangci-lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint config verify
+      - golangci-lint fmt ./...
+      - golangci-lint run --fix --max-same-issues 50 ./...
+      - git add -u .
+
+  lint:govulncheck:
+    desc: Check for dependency vulnerabilities
+    cmds:
+      - govulncheck ./...
+
+  lint:nilaway:
+    desc: Run nil safety analysis
+    cmds:
+      - nilaway ./...
+
+  lint:go-arch-lint:
+    desc: Check package architecture constraints
+    cmds:
+      - go-arch-lint check
+
+  tidy:
+    desc: Tidy go.mod and go.sum
+    cmds:
+      - go mod tidy
+
+  tidy:check:
+    desc: Verify go.mod and go.sum are tidy
+    cmds:
+      - go mod tidy
+      - git diff --exit-code -- go.mod go.sum
+
+  clean:
+    desc: Remove built binaries
+    cmds:
+      - rm -rf {{.BIN_DIR}}
+
+  hooks:install:
+    desc: Install lefthook commit hooks
+    cmds:
+      - lefthook install
