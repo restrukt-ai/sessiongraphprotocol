@@ -21,11 +21,7 @@ var (
 // IDGenerator creates stable string identifiers for sessions and nodes.
 type IDGenerator func() ID
 
-// Clock reports the current time.
-type Clock func() time.Time
-
 type config struct {
-	clock       Clock
 	idGenerator IDGenerator
 	eventNames  EventNames
 	sessionID   ID
@@ -35,17 +31,6 @@ type config struct {
 
 // Option configures a Graph.
 type Option func(*config)
-
-// WithClock overrides the graph clock.
-func WithClock(clock Clock) Option {
-	return func(cfg *config) {
-		if clock == nil {
-			return
-		}
-
-		cfg.clock = clock
-	}
-}
 
 // WithIDGenerator overrides the graph ID generator.
 func WithIDGenerator(generator IDGenerator) Option {
@@ -85,7 +70,6 @@ type Graph struct {
 	mu             sync.RWMutex
 	session        Session
 	eventNames     EventNames
-	clock          Clock
 	idGenerator    IDGenerator
 	condensers     map[CondenseTrigger]Condenser
 	nodes          map[ID]Node
@@ -99,9 +83,6 @@ type Graph struct {
 // NewGraph creates a new in-memory session graph and emits a session start event.
 func NewGraph(options ...Option) *Graph {
 	cfg := config{
-		clock: func() time.Time {
-			return time.Now().UTC()
-		},
 		idGenerator: func() ID {
 			return ID(uuid.NewString())
 		},
@@ -119,11 +100,10 @@ func NewGraph(options ...Option) *Graph {
 	graph := &Graph{
 		session: Session{
 			ID:          cfg.sessionID,
-			Timestamp:   cfg.clock(),
+			Timestamp:   time.Now().UTC(),
 			SpawnedFrom: copySpawnReference(cfg.spawnedFrom),
 		},
 		eventNames:  cfg.eventNames,
-		clock:       cfg.clock,
 		idGenerator: cfg.idGenerator,
 		condensers:  copyCondensers(cfg.condensers),
 		nodes:       make(map[ID]Node),
@@ -251,7 +231,7 @@ func (graph *Graph) End() (Event, error) {
 		Kind:           EventKindSessionEnded,
 		Event:          graph.eventNames.Name(EventKindSessionEnded),
 		SessionID:      graph.session.ID,
-		Timestamp:      graph.clock(),
+		Timestamp:      time.Now().UTC(),
 		TerminalNodeID: graph.terminalNodeID,
 	}
 
@@ -337,7 +317,7 @@ func (graph *Graph) appendNode(
 	node := Node{
 		ID:              graph.idGenerator(),
 		SessionID:       graph.session.ID,
-		Timestamp:       graph.clock(),
+		Timestamp:       time.Now().UTC(),
 		ParentIDs:       validatedParents,
 		SynthesizedFrom: validatedSources,
 		Message:         message,

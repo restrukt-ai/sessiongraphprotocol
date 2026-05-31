@@ -3,15 +3,12 @@ package sessiongraphprotocol
 import (
 	"errors"
 	"testing"
-	"time"
 )
 
 func TestNewGraphEmitsConfigurableSessionStart(t *testing.T) {
 	t.Parallel()
 
-	timestamp := time.Date(2026, time.May, 30, 12, 0, 0, 0, time.UTC)
 	graph := NewGraph(
-		WithClock(func() time.Time { return timestamp }),
 		WithIDGenerator(sequenceIDs("session-1")),
 		WithEventNames(EventNames{
 			SessionStart:     "sgp.session.started",

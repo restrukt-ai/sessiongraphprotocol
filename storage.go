@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -90,9 +89,6 @@ func RestoreGraph(snapshot GraphSnapshot) (*Graph, error) {
 			SpawnedFrom: copySpawnReference(snapshot.Session.SpawnedFrom),
 		},
 		eventNames: eventNames,
-		clock: func() time.Time {
-			return time.Now().UTC()
-		},
 		idGenerator: func() ID {
 			return ID(uuid.NewString())
 		},
