@@ -21,13 +21,29 @@ var (
 const (
 	// GraphSnapshotVersion1 is the first explicit snapshot schema version.
 	GraphSnapshotVersion1 uint32 = 1
+	// GraphSnapshotVersion2 adds EndReason to the snapshot and session.ended event.
+	GraphSnapshotVersion2 uint32 = 2
 	// CurrentGraphSnapshotVersion is the version emitted by this package.
-	CurrentGraphSnapshotVersion = GraphSnapshotVersion1
+	CurrentGraphSnapshotVersion = GraphSnapshotVersion2
 )
 
 type snapshotUpgrader func(GraphSnapshot) (GraphSnapshot, error)
 
-var snapshotUpgraders = map[uint32]snapshotUpgrader{}
+var snapshotUpgraders = map[uint32]snapshotUpgrader{
+	1: upgradeV1ToV2,
+}
+
+// upgradeV1ToV2 adds the EndReason field introduced in v2.
+// V1 graphs that are closed were always closed via normal completion —
+// failed sessions in v1 were left open — so closed snapshots are backfilled
+// with EndReasonComplete.
+func upgradeV1ToV2(snap GraphSnapshot) (GraphSnapshot, error) {
+	snap.Version = GraphSnapshotVersion2
+	if snap.Closed && snap.EndReason == "" {
+		snap.EndReason = EndReasonComplete
+	}
+	return snap, nil
+}
 
 // Store persists and loads SGP graphs.
 type Store interface {
@@ -45,6 +61,7 @@ type GraphSnapshot struct {
 	HeadID         ID         `json:"head_id,omitempty"`
 	TerminalNodeID ID         `json:"terminal_node_id,omitempty"`
 	Closed         bool       `json:"closed"`
+	EndReason      EndReason  `json:"end_reason,omitempty"`
 }
 
 // Snapshot returns a serializable copy of the graph.
@@ -61,6 +78,7 @@ func (graph *Graph) Snapshot() GraphSnapshot {
 		HeadID:         graph.headID,
 		TerminalNodeID: graph.terminalNodeID,
 		Closed:         graph.closed,
+		EndReason:      graph.endReason,
 	}
 }
 
@@ -97,6 +115,7 @@ func RestoreGraph(snapshot GraphSnapshot) (*Graph, error) {
 		events:         copyEvents(snapshot.Events),
 		headID:         snapshot.HeadID,
 		terminalNodeID: snapshot.TerminalNodeID,
+		endReason:      snapshot.EndReason,
 		closed:         snapshot.Closed,
 	}
 

@@ -199,6 +199,17 @@ const (
 	EventKindSessionEnded
 )
 
+// EndReason describes why a session terminated. It is carried on the
+// session.ended event and persisted in the graph snapshot.
+type EndReason string
+
+const (
+	// EndReasonComplete indicates the session finished successfully.
+	EndReasonComplete EndReason = "complete"
+	// EndReasonFailed indicates the session terminated due to an error.
+	EndReasonFailed EndReason = "failed"
+)
+
 // EventNames maps stable event kinds to emitted event strings.
 type EventNames struct {
 	SessionStart     string
@@ -242,4 +253,5 @@ type Event struct {
 	SpawnedFrom    *SpawnReference `json:"spawned_from,omitempty"`
 	Node           *Node           `json:"node,omitempty"`
 	TerminalNodeID ID              `json:"terminal_node_id,omitempty"`
+	Reason         EndReason       `json:"reason,omitempty"`
 }

@@ -189,7 +189,7 @@ func TestEndUsesCurrentHead(t *testing.T) {
 		t.Fatalf("append root: %v", err)
 	}
 
-	event, err := graph.End()
+	event, err := graph.End(EndReasonComplete)
 	if err != nil {
 		t.Fatalf("end graph: %v", err)
 	}
@@ -198,8 +198,30 @@ func TestEndUsesCurrentHead(t *testing.T) {
 		t.Fatalf("expected terminal node %q, got %q", want, got)
 	}
 
+	if got, want := event.Reason, EndReasonComplete; got != want {
+		t.Fatalf("expected end reason %q, got %q", want, got)
+	}
+
 	if _, _, err = graph.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "late"}}}}}, root.ID); !errors.Is(err, ErrSessionClosed) {
 		t.Fatalf("expected ErrSessionClosed, got %v", err)
+	}
+}
+
+func TestEndReasonIsCarriedOnEvent(t *testing.T) {
+	t.Parallel()
+
+	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
+	if _, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}}); err != nil {
+		t.Fatalf("append root: %v", err)
+	}
+
+	event, err := graph.End(EndReasonFailed)
+	if err != nil {
+		t.Fatalf("end graph: %v", err)
+	}
+
+	if got, want := event.Reason, EndReasonFailed; got != want {
+		t.Fatalf("expected end reason %q, got %q", want, got)
 	}
 }
 

@@ -139,7 +139,7 @@ func TestRestoreGraphRoundTripsSnapshot(t *testing.T) {
 		t.Fatalf("append assistant: %v", err)
 	}
 
-	if _, err = graph.End(); err != nil {
+	if _, err = graph.End(EndReasonComplete); err != nil {
 		t.Fatalf("end graph: %v", err)
 	}
 
@@ -168,6 +168,93 @@ func TestRestoreGraphRoundTripsSnapshot(t *testing.T) {
 
 	if _, _, err = restored.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "late"}}}}}, assistantNode.ID); !errors.Is(err, ErrSessionClosed) {
 		t.Fatalf("expected restored closed graph to reject appends, got %v", err)
+	}
+}
+
+func TestUpgradeV1ToV2BackfillsEndReasonOnClosedSnapshot(t *testing.T) {
+	t.Parallel()
+
+	v1Snapshot := GraphSnapshot{
+		Version: GraphSnapshotVersion1,
+		Session: Session{ID: "session-1"},
+		Nodes: []Node{{
+			ID:        "node-a",
+			SessionID: "session-1",
+			Message:   Message{System: &SystemMessage{Text: "sys"}},
+		}},
+		Events: []Event{
+			{Event: DefaultEventNames().SessionStart, SessionID: "session-1"},
+			{Event: DefaultEventNames().NodeAppended, SessionID: "session-1"},
+			{Event: DefaultEventNames().SessionEnded, SessionID: "session-1", TerminalNodeID: "node-a"},
+		},
+		HeadID:         "node-a",
+		TerminalNodeID: "node-a",
+		Closed:         true,
+	}
+
+	upgraded, err := UpgradeSnapshot(v1Snapshot)
+	if err != nil {
+		t.Fatalf("upgrade snapshot: %v", err)
+	}
+
+	if got, want := upgraded.Version, GraphSnapshotVersion2; got != want {
+		t.Fatalf("expected version %d, got %d", want, got)
+	}
+
+	if got, want := upgraded.EndReason, EndReasonComplete; got != want {
+		t.Fatalf("expected end reason %q, got %q", want, got)
+	}
+}
+
+func TestUpgradeV1ToV2LeavesEndReasonEmptyOnOpenSnapshot(t *testing.T) {
+	t.Parallel()
+
+	v1Snapshot := GraphSnapshot{
+		Version: GraphSnapshotVersion1,
+		Session: Session{ID: "session-1"},
+		Nodes: []Node{{
+			ID:        "node-a",
+			SessionID: "session-1",
+			Message:   Message{System: &SystemMessage{Text: "sys"}},
+		}},
+		Events: []Event{
+			{Event: DefaultEventNames().SessionStart, SessionID: "session-1"},
+			{Event: DefaultEventNames().NodeAppended, SessionID: "session-1"},
+		},
+		HeadID: "node-a",
+		Closed: false,
+	}
+
+	upgraded, err := UpgradeSnapshot(v1Snapshot)
+	if err != nil {
+		t.Fatalf("upgrade snapshot: %v", err)
+	}
+
+	if got := upgraded.EndReason; got != "" {
+		t.Fatalf("expected empty end reason on open snapshot, got %q", got)
+	}
+}
+
+func TestSnapshotRoundTripsEndReason(t *testing.T) {
+	t.Parallel()
+
+	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
+	if _, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}}); err != nil {
+		t.Fatalf("append root: %v", err)
+	}
+
+	if _, err := graph.End(EndReasonFailed); err != nil {
+		t.Fatalf("end graph: %v", err)
+	}
+
+	restored, err := RestoreGraph(graph.Snapshot())
+	if err != nil {
+		t.Fatalf("restore graph: %v", err)
+	}
+
+	restoredSnapshot := restored.Snapshot()
+	if got, want := restoredSnapshot.EndReason, EndReasonFailed; got != want {
+		t.Fatalf("expected end reason %q after round-trip, got %q", want, got)
 	}
 }
 

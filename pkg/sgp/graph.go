@@ -76,6 +76,7 @@ type Graph struct {
 	events         []Event
 	headID         ID
 	terminalNodeID ID
+	endReason      EndReason
 	closed         bool
 }
 
@@ -209,7 +210,8 @@ func (graph *Graph) Rewrite(message Message, parentID ID, synthesizedFrom ...ID)
 }
 
 // End emits a session ended event using the current head as the terminal node.
-func (graph *Graph) End() (Event, error) {
+// reason must be one of [EndReasonComplete] or [EndReasonFailed].
+func (graph *Graph) End(reason EndReason) (Event, error) {
 	graph.mu.Lock()
 	defer graph.mu.Unlock()
 
@@ -223,6 +225,7 @@ func (graph *Graph) End() (Event, error) {
 
 	graph.closed = true
 	graph.terminalNodeID = graph.headID
+	graph.endReason = reason
 
 	event := Event{
 		Kind:           EventKindSessionEnded,
@@ -230,6 +233,7 @@ func (graph *Graph) End() (Event, error) {
 		SessionID:      graph.session.ID,
 		Timestamp:      time.Now().UTC(),
 		TerminalNodeID: graph.terminalNodeID,
+		Reason:         reason,
 	}
 
 	graph.events = append(graph.events, event)
@@ -512,6 +516,7 @@ func copyEvent(event Event) Event {
 		SpawnedFrom:    copySpawnReference(event.SpawnedFrom),
 		Node:           copyNodePointer(event.Node),
 		TerminalNodeID: event.TerminalNodeID,
+		Reason:         event.Reason,
 	}
 }
 

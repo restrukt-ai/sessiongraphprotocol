@@ -138,7 +138,7 @@ ordered by emission time.
 | `session.start`     | A session begins                                        | `session_id`, `spawned_from` (subagents only)          |
 | `node.appended`     | A message is added to the session                       | `node` (full node object)                              |
 | `history.rewritten` | The harness aggregates branches and redirects the trunk | `node` with `parent_ids` and `synthesized_from`        |
-| `session.ended`     | A session terminates                                    | `session_id`, `terminal_node_id`                       |
+| `session.ended`     | A session terminates                                    | `session_id`, `terminal_node_id`, `reason`             |
 
 ### `session.start`
 
@@ -196,11 +196,14 @@ branch tips folded into the rewrite.
   "event": "session.ended",
   "session_id": "<uuid>",
   "timestamp": "<rfc3339>",
-  "terminal_node_id": "<uuid>"
+  "terminal_node_id": "<uuid>",
+  "reason": "complete | failed"
 }
 ```
 
 Emitted once when the session terminates. `terminal_node_id` is the HEAD at termination.
+`reason` is one of `complete` (the agent finished successfully) or `failed` (the session
+terminated due to an error).
 
 ## Examples
 
