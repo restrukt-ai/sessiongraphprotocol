@@ -238,21 +238,13 @@ func (service *Service) AppendEvent(ctx context.Context, cur session.Session, ev
 	service.mergeUserStateLocked(key.appName, key.userID, userDelta)
 	maps.Copy(tracked.state, sessDelta)
 
-	role := toSGPRole(event.Author)
-	content := any("")
+	text := ""
 	if event.LLMResponse.Content != nil {
-		content = event.LLMResponse.Content
+		text = fmt.Sprintf("%v", event.LLMResponse.Content)
 	}
 
-	metadata := map[string]any{
-		"adk_event_id":      event.ID,
-		"adk_author":        event.Author,
-		"adk_branch":        event.Branch,
-		"adk_invocation":    event.InvocationID,
-		"adk_turn_complete": event.TurnComplete,
-	}
-
-	if err := appendSGPNodeLocked(tracked.graph, role, content, metadata); err != nil {
+	msg := buildSGPMessage(event.Author, text)
+	if err := appendSGPNodeLocked(tracked.graph, msg); err != nil {
 		return err
 	}
 
@@ -315,13 +307,11 @@ func (service *Service) IngestOrchestratorEvent(
 		return fmt.Errorf("session %s not found", sessionID)
 	}
 
-	metadata := map[string]any{
-		"oac_channel":       channel,
-		"oac_content_type":  contentType,
-		"oac_payload_bytes": len(payload),
-	}
-
-	if err := appendSGPNodeLocked(tracked.graph, sgp.MessageRoleTool, string(payload), metadata); err != nil {
+	msg := sgp.Message{Tool: &sgp.ToolMessage{
+		Name:  channel,
+		Parts: []sgp.ContentPart{{Text: &sgp.TextPart{Text: string(payload)}}},
+	}}
+	if err := appendSGPNodeLocked(tracked.graph, msg); err != nil {
 		return err
 	}
 
@@ -334,22 +324,34 @@ func (service *Service) IngestOrchestratorEvent(
 	return nil
 }
 
-func appendSGPNodeLocked(graph *sgp.Graph, role sgp.MessageRole, content any, metadata map[string]any) error {
+func appendSGPNodeLocked(graph *sgp.Graph, msg sgp.Message) error {
 	head, hasHead := graph.Head()
 	if hasHead {
-		_, _, err := graph.Append(sgp.Message{Role: role, Content: content}, metadata, head.ID)
+		_, _, err := graph.Append(msg, head.ID)
 		if err != nil {
 			return fmt.Errorf("append sgp node: %w", err)
 		}
 		return nil
 	}
 
-	_, _, err := graph.Append(sgp.Message{Role: role, Content: content}, metadata)
+	_, _, err := graph.Append(msg)
 	if err != nil {
 		return fmt.Errorf("append sgp root node: %w", err)
 	}
 
 	return nil
+}
+
+func buildSGPMessage(author, text string) sgp.Message {
+	part := sgp.ContentPart{Text: &sgp.TextPart{Text: text}}
+	switch {
+	case strings.EqualFold(author, "user"):
+		return sgp.Message{User: &sgp.UserMessage{Parts: []sgp.ContentPart{part}}}
+	case strings.EqualFold(author, "tool"):
+		return sgp.Message{Tool: &sgp.ToolMessage{Parts: []sgp.ContentPart{part}}}
+	default:
+		return sgp.Message{Assistant: &sgp.AssistantMessage{Parts: []sgp.ContentPart{part}}}
+	}
 }
 
 func (service *Service) mergeAppStateLocked(appName string, delta map[string]any) map[string]any {
@@ -557,12 +559,3 @@ func copySession(tracked *trackedSession) session.Session {
 	}
 }
 
-func toSGPRole(author string) sgp.MessageRole {
-	if strings.EqualFold(author, "user") {
-		return sgp.MessageRoleUser
-	}
-	if strings.EqualFold(author, "tool") {
-		return sgp.MessageRoleTool
-	}
-	return sgp.MessageRoleAssistant
-}

@@ -97,8 +97,8 @@ func TestServiceCreateAppendAndPersistSGP(t *testing.T) {
 	if !ok {
 		t.Fatalf("graph head missing")
 	}
-	if head.Message.Role != sgp.MessageRoleUser {
-		t.Fatalf("head role = %s, want user", head.Message.Role)
+	if head.Message.Role() != sgp.MessageRoleUser {
+		t.Fatalf("head role = %s, want user", head.Message.Role())
 	}
 }
 
@@ -222,10 +222,14 @@ func TestServiceIngestOrchestratorEvent(t *testing.T) {
 	if !ok {
 		t.Fatalf("graph head missing")
 	}
-	if head.Message.Role != sgp.MessageRoleTool {
-		t.Fatalf("head role = %s, want tool", head.Message.Role)
+	if head.Message.Role() != sgp.MessageRoleTool {
+		t.Fatalf("head role = %s, want tool", head.Message.Role())
 	}
-	if head.Metadata["oac_channel"] != "agent.events" {
-		t.Fatalf("oac_channel = %v, want agent.events", head.Metadata["oac_channel"])
+	if head.Message.Tool == nil || head.Message.Tool.Name != "agent.events" {
+		name := ""
+		if head.Message.Tool != nil {
+			name = head.Message.Tool.Name
+		}
+		t.Fatalf("oac_channel = %v, want agent.events", name)
 	}
 }

@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "session": {
+    "id": "23769d8e-29e7-44c0-97d9-caf0af974811",
+    "timestamp": "2026-06-02T08:42:53.784075Z"
+  },
+  "event_names": {
+    "SessionStart": "session.start",
+    "NodeAppended": "node.appended",
+    "HistoryRewritten": "history.rewritten",
+    "SessionEnded": "session.ended"
+  },
+  "nodes": [
+    {
+      "id": "a2419573-a423-4e47-bc7e-d36f3b5d0b86",
+      "session_id": "23769d8e-29e7-44c0-97d9-caf0af974811",
+      "timestamp": "2026-06-02T08:42:53.784154Z",
+      "parent_ids": null,
+      "message": {
+        "system": {
+          "text": "You are a helpful assistant with access to bash. Use the bash tool to execute commands when needed."
+        }
+      }
+    },
+    {
+      "id": "d0e615b6-4dbe-4c78-b0e9-4ba725fd529d",
+      "session_id": "23769d8e-29e7-44c0-97d9-caf0af974811",
+      "timestamp": "2026-06-02T08:42:53.784776Z",
+      "parent_ids": [
+        "a2419573-a423-4e47-bc7e-d36f3b5d0b86"
+      ],
+      "message": {
+        "user": {
+          "parts": [
+            {
+              "text": {
+                "text": "run ls in the current directory, then teleport to /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "events": [
+    {
+      "event": "session.start",
+      "session_id": "23769d8e-29e7-44c0-97d9-caf0af974811",
+      "timestamp": "2026-06-02T08:42:53.784075Z"
+    },
+    {
+      "event": "node.appended",
+      "session_id": "23769d8e-29e7-44c0-97d9-caf0af974811",
+      "timestamp": "2026-06-02T08:42:53.784154Z",
+      "node": {
+        "id": "a2419573-a423-4e47-bc7e-d36f3b5d0b86",
+        "session_id": "23769d8e-29e7-44c0-97d9-caf0af974811",
+        "timestamp": "2026-06-02T08:42:53.784154Z",
+        "parent_ids": null,
+        "message": {
+          "system": {
+            "text": "You are a helpful assistant with access to bash. Use the bash tool to execute commands when needed."
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "23769d8e-29e7-44c0-97d9-caf0af974811",
+      "timestamp": "2026-06-02T08:42:53.784776Z",
+      "node": {
+        "id": "d0e615b6-4dbe-4c78-b0e9-4ba725fd529d",
+        "session_id": "23769d8e-29e7-44c0-97d9-caf0af974811",
+        "timestamp": "2026-06-02T08:42:53.784776Z",
+        "parent_ids": [
+          "a2419573-a423-4e47-bc7e-d36f3b5d0b86"
+        ],
+        "message": {
+          "user": {
+            "parts": [
+              {
+                "text": {
+                  "text": "run ls in the current directory, then teleport to /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "session.ended",
+      "session_id": "23769d8e-29e7-44c0-97d9-caf0af974811",
+      "timestamp": "2026-06-02T08:42:53.796406Z",
+      "terminal_node_id": "d0e615b6-4dbe-4c78-b0e9-4ba725fd529d"
+    }
+  ],
+  "head_id": "d0e615b6-4dbe-4c78-b0e9-4ba725fd529d",
+  "terminal_node_id": "d0e615b6-4dbe-4c78-b0e9-4ba725fd529d",
+  "closed": true
+}

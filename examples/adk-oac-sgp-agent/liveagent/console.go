@@ -218,8 +218,7 @@ func (console *Console) HandleUserTurn(ctx context.Context, generator ModelGener
 			}
 
 			node, _, appendErr := console.agent.Graph().Append(
-				sgp.Message{Role: sgp.MessageRoleAssistant, Content: response},
-				map[string]any{"kind": "assistant_response"},
+				sgp.Message{Assistant: &sgp.AssistantMessage{Parts: []sgp.ContentPart{{Text: &sgp.TextPart{Text: response}}}}},
 				console.headID,
 			)
 			if appendErr != nil {
@@ -271,20 +270,21 @@ func (console *Console) buildPromptContents() ([]*genai.Content, error) {
 
 	contents := make([]*genai.Content, 0, len(messages))
 	for _, message := range messages {
-		text := contentText(message.Content)
-		if text == "" {
-			continue
-		}
-
-		switch message.Role {
-		case sgp.MessageRoleSystem:
-			continue
-		case sgp.MessageRoleUser:
-			contents = append(contents, genai.NewContentFromText(text, genai.RoleUser))
-		case sgp.MessageRoleAssistant:
-			contents = append(contents, genai.NewContentFromText(text, genai.RoleModel))
-		case sgp.MessageRoleTool:
-			contents = append(contents, genai.NewContentFromText("Tool result:\n"+text, genai.RoleUser))
+		switch {
+		case message.System != nil:
+			// skip system messages
+		case message.User != nil:
+			if text := message.TextContent(); text != "" {
+				contents = append(contents, genai.NewContentFromText(text, genai.RoleUser))
+			}
+		case message.Assistant != nil:
+			if text := message.TextContent(); text != "" {
+				contents = append(contents, genai.NewContentFromText(text, genai.RoleModel))
+			}
+		case message.Tool != nil:
+			if text := message.TextContent(); text != "" {
+				contents = append(contents, genai.NewContentFromText("Tool result:\n"+text, genai.RoleUser))
+			}
 		}
 	}
 
@@ -787,22 +787,6 @@ func isBinary(data []byte) bool {
 	}
 
 	return false
-}
-
-func contentText(value any) string {
-	switch typed := value.(type) {
-	case nil:
-		return ""
-	case string:
-		return typed
-	default:
-		data, err := json.MarshalIndent(typed, "", "  ")
-		if err != nil {
-			return fmt.Sprint(value)
-		}
-
-		return string(data)
-	}
 }
 
 func firstCandidateContent(result *genai.GenerateContentResponse) *genai.Content {

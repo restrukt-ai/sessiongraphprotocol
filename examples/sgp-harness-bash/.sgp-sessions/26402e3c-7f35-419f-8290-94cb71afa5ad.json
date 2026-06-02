@@ -1,0 +1,324 @@
+{
+  "version": 1,
+  "session": {
+    "id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+    "timestamp": "2026-06-02T08:43:54.083499Z"
+  },
+  "event_names": {
+    "SessionStart": "session.start",
+    "NodeAppended": "node.appended",
+    "HistoryRewritten": "history.rewritten",
+    "SessionEnded": "session.ended"
+  },
+  "nodes": [
+    {
+      "id": "1431118a-8f76-44a6-9bec-837b2b26e47e",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:43:54.083517Z",
+      "parent_ids": null,
+      "message": {
+        "system": {
+          "text": "You are a helpful assistant with access to bash. Use the bash tool to execute commands when needed."
+        }
+      }
+    },
+    {
+      "id": "847cc922-be38-4c71-9606-5ac6ef8b489a",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:43:54.084021Z",
+      "parent_ids": [
+        "1431118a-8f76-44a6-9bec-837b2b26e47e"
+      ],
+      "message": {
+        "user": {
+          "parts": [
+            {
+              "text": {
+                "text": "run ls in the current directory, then teleport to /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "37ea1707-f6ca-452a-a751-2aa3075c8ee8",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:44:23.868169Z",
+      "parent_ids": [
+        "847cc922-be38-4c71-9606-5ac6ef8b489a"
+      ],
+      "message": {
+        "assistant": {
+          "tool_calls": [
+            {
+              "id": "tc-1-0",
+              "name": "bash",
+              "arguments": "{\"command\":\"ls\"}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "1fcf1b1e-10f9-43a5-8646-6ab1073a708e",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:44:23.898049Z",
+      "parent_ids": [
+        "37ea1707-f6ca-452a-a751-2aa3075c8ee8"
+      ],
+      "message": {
+        "tool": {
+          "tool_call_id": "tc-1-0",
+          "name": "bash",
+          "parts": [
+            {
+              "text": {
+                "text": "go.mod\ngo.sum\nharness.go\nmain.go\nollama.go\nsgp-harness-bash\ntools.go\n"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "1bb4c6f2-3e0e-4ccb-848d-49a1a4a5e257",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:44:35.855588Z",
+      "parent_ids": [
+        "1fcf1b1e-10f9-43a5-8646-6ab1073a708e"
+      ],
+      "message": {
+        "assistant": {
+          "tool_calls": [
+            {
+              "id": "tc-2-0",
+              "name": "teleport",
+              "arguments": "{\"destination\":\"/Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash\"}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "8825ac91-ea36-4fbf-a2d4-ab0682b130f9",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:44:35.863308Z",
+      "parent_ids": [
+        "1bb4c6f2-3e0e-4ccb-848d-49a1a4a5e257"
+      ],
+      "message": {
+        "tool": {
+          "tool_call_id": "tc-2-0",
+          "name": "teleport",
+          "parts": [
+            {
+              "text": {
+                "text": "Arrived at /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash. Tools: bash (shell), teleport (switch harness)."
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "62c8abf3-d947-4084-a1cd-bcd418c0176b",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:44:44.207011Z",
+      "parent_ids": [
+        "8825ac91-ea36-4fbf-a2d4-ab0682b130f9"
+      ],
+      "message": {
+        "assistant": {
+          "parts": [
+            {
+              "text": {
+                "text": "I have listed the files in the current directory and teleported to `/Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash`."
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "events": [
+    {
+      "event": "session.start",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:43:54.083499Z"
+    },
+    {
+      "event": "node.appended",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:43:54.083517Z",
+      "node": {
+        "id": "1431118a-8f76-44a6-9bec-837b2b26e47e",
+        "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+        "timestamp": "2026-06-02T08:43:54.083517Z",
+        "parent_ids": null,
+        "message": {
+          "system": {
+            "text": "You are a helpful assistant with access to bash. Use the bash tool to execute commands when needed."
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:43:54.084021Z",
+      "node": {
+        "id": "847cc922-be38-4c71-9606-5ac6ef8b489a",
+        "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+        "timestamp": "2026-06-02T08:43:54.084021Z",
+        "parent_ids": [
+          "1431118a-8f76-44a6-9bec-837b2b26e47e"
+        ],
+        "message": {
+          "user": {
+            "parts": [
+              {
+                "text": {
+                  "text": "run ls in the current directory, then teleport to /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:44:23.868169Z",
+      "node": {
+        "id": "37ea1707-f6ca-452a-a751-2aa3075c8ee8",
+        "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+        "timestamp": "2026-06-02T08:44:23.868169Z",
+        "parent_ids": [
+          "847cc922-be38-4c71-9606-5ac6ef8b489a"
+        ],
+        "message": {
+          "assistant": {
+            "tool_calls": [
+              {
+                "id": "tc-1-0",
+                "name": "bash",
+                "arguments": "{\"command\":\"ls\"}"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:44:23.898049Z",
+      "node": {
+        "id": "1fcf1b1e-10f9-43a5-8646-6ab1073a708e",
+        "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+        "timestamp": "2026-06-02T08:44:23.898049Z",
+        "parent_ids": [
+          "37ea1707-f6ca-452a-a751-2aa3075c8ee8"
+        ],
+        "message": {
+          "tool": {
+            "tool_call_id": "tc-1-0",
+            "name": "bash",
+            "parts": [
+              {
+                "text": {
+                  "text": "go.mod\ngo.sum\nharness.go\nmain.go\nollama.go\nsgp-harness-bash\ntools.go\n"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:44:35.855588Z",
+      "node": {
+        "id": "1bb4c6f2-3e0e-4ccb-848d-49a1a4a5e257",
+        "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+        "timestamp": "2026-06-02T08:44:35.855588Z",
+        "parent_ids": [
+          "1fcf1b1e-10f9-43a5-8646-6ab1073a708e"
+        ],
+        "message": {
+          "assistant": {
+            "tool_calls": [
+              {
+                "id": "tc-2-0",
+                "name": "teleport",
+                "arguments": "{\"destination\":\"/Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash\"}"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:44:35.863308Z",
+      "node": {
+        "id": "8825ac91-ea36-4fbf-a2d4-ab0682b130f9",
+        "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+        "timestamp": "2026-06-02T08:44:35.863308Z",
+        "parent_ids": [
+          "1bb4c6f2-3e0e-4ccb-848d-49a1a4a5e257"
+        ],
+        "message": {
+          "tool": {
+            "tool_call_id": "tc-2-0",
+            "name": "teleport",
+            "parts": [
+              {
+                "text": {
+                  "text": "Arrived at /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash. Tools: bash (shell), teleport (switch harness)."
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:44:44.207011Z",
+      "node": {
+        "id": "62c8abf3-d947-4084-a1cd-bcd418c0176b",
+        "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+        "timestamp": "2026-06-02T08:44:44.207011Z",
+        "parent_ids": [
+          "8825ac91-ea36-4fbf-a2d4-ab0682b130f9"
+        ],
+        "message": {
+          "assistant": {
+            "parts": [
+              {
+                "text": {
+                  "text": "I have listed the files in the current directory and teleported to `/Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash`."
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "session.ended",
+      "session_id": "26402e3c-7f35-419f-8290-94cb71afa5ad",
+      "timestamp": "2026-06-02T08:44:44.208239Z",
+      "terminal_node_id": "62c8abf3-d947-4084-a1cd-bcd418c0176b"
+    }
+  ],
+  "head_id": "62c8abf3-d947-4084-a1cd-bcd418c0176b",
+  "terminal_node_id": "62c8abf3-d947-4084-a1cd-bcd418c0176b",
+  "closed": true
+}

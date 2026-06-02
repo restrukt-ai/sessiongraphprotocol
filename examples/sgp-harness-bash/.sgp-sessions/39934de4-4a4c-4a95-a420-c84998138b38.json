@@ -1,0 +1,320 @@
+{
+  "version": 1,
+  "session": {
+    "id": "39934de4-4a4c-4a95-a420-c84998138b38",
+    "timestamp": "2026-06-02T08:14:05.866317Z"
+  },
+  "event_names": {
+    "SessionStart": "session.start",
+    "NodeAppended": "node.appended",
+    "HistoryRewritten": "history.rewritten",
+    "SessionEnded": "session.ended"
+  },
+  "nodes": [
+    {
+      "id": "48ca6584-63e1-48c9-bc9c-e2741a8fc8bd",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:05.866393Z",
+      "parent_ids": null,
+      "message": {
+        "system": {
+          "text": "You are a helpful assistant with access to bash. Use the bash tool to execute commands when needed."
+        }
+      }
+    },
+    {
+      "id": "8e871de5-3973-40d8-add0-f1d329f28390",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:05.86713Z",
+      "parent_ids": [
+        "48ca6584-63e1-48c9-bc9c-e2741a8fc8bd"
+      ],
+      "message": {
+        "user": {
+          "parts": [
+            {
+              "text": {
+                "text": "hello"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "e7ff7c7a-8cf5-4fa7-89b0-6e08ce69144a",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:27.42225Z",
+      "parent_ids": [
+        "8e871de5-3973-40d8-add0-f1d329f28390"
+      ],
+      "message": {
+        "assistant": {
+          "parts": [
+            {
+              "text": {
+                "text": "Hello! How can I help you today?"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "8f73ef89-6510-41fc-b18a-64491241b325",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:27.42368Z",
+      "parent_ids": [
+        "e7ff7c7a-8cf5-4fa7-89b0-6e08ce69144a"
+      ],
+      "message": {
+        "user": {
+          "parts": [
+            {
+              "text": {
+                "text": "what files are in your current directory?"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "84e9c930-d536-45b3-b2a3-3ae5973d9fd1",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:33.670065Z",
+      "parent_ids": [
+        "8f73ef89-6510-41fc-b18a-64491241b325"
+      ],
+      "message": {
+        "assistant": {
+          "tool_calls": [
+            {
+              "id": "tc-1-0",
+              "name": "bash",
+              "arguments": "{\"command\":\"ls -F\"}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c06f3105-8cc9-491d-8f02-651105e7b4ec",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:33.687046Z",
+      "parent_ids": [
+        "84e9c930-d536-45b3-b2a3-3ae5973d9fd1"
+      ],
+      "message": {
+        "tool": {
+          "tool_call_id": "tc-1-0",
+          "name": "bash",
+          "parts": [
+            {
+              "text": {
+                "text": "go.mod\ngo.sum\nharness.go\nmain.go\nollama.go\nsgp-harness-bash*\ntools.go\n"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d0633281-074e-418c-bd35-83c7aa32968d",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:42.940487Z",
+      "parent_ids": [
+        "c06f3105-8cc9-491d-8f02-651105e7b4ec"
+      ],
+      "message": {
+        "assistant": {
+          "parts": [
+            {
+              "text": {
+                "text": "The files in the current directory are:\n\n* `go.mod`\n* `go.sum`\n* `harness.go`\n* `main.go`\n* `ollama.go`\n* `sgp-harness-bash` (executable)\n* `tools.go`"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "events": [
+    {
+      "event": "session.start",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:05.866317Z"
+    },
+    {
+      "event": "node.appended",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:05.866393Z",
+      "node": {
+        "id": "48ca6584-63e1-48c9-bc9c-e2741a8fc8bd",
+        "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+        "timestamp": "2026-06-02T08:14:05.866393Z",
+        "parent_ids": null,
+        "message": {
+          "system": {
+            "text": "You are a helpful assistant with access to bash. Use the bash tool to execute commands when needed."
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:05.86713Z",
+      "node": {
+        "id": "8e871de5-3973-40d8-add0-f1d329f28390",
+        "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+        "timestamp": "2026-06-02T08:14:05.86713Z",
+        "parent_ids": [
+          "48ca6584-63e1-48c9-bc9c-e2741a8fc8bd"
+        ],
+        "message": {
+          "user": {
+            "parts": [
+              {
+                "text": {
+                  "text": "hello"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:27.42225Z",
+      "node": {
+        "id": "e7ff7c7a-8cf5-4fa7-89b0-6e08ce69144a",
+        "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+        "timestamp": "2026-06-02T08:14:27.42225Z",
+        "parent_ids": [
+          "8e871de5-3973-40d8-add0-f1d329f28390"
+        ],
+        "message": {
+          "assistant": {
+            "parts": [
+              {
+                "text": {
+                  "text": "Hello! How can I help you today?"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:27.42368Z",
+      "node": {
+        "id": "8f73ef89-6510-41fc-b18a-64491241b325",
+        "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+        "timestamp": "2026-06-02T08:14:27.42368Z",
+        "parent_ids": [
+          "e7ff7c7a-8cf5-4fa7-89b0-6e08ce69144a"
+        ],
+        "message": {
+          "user": {
+            "parts": [
+              {
+                "text": {
+                  "text": "what files are in your current directory?"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:33.670065Z",
+      "node": {
+        "id": "84e9c930-d536-45b3-b2a3-3ae5973d9fd1",
+        "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+        "timestamp": "2026-06-02T08:14:33.670065Z",
+        "parent_ids": [
+          "8f73ef89-6510-41fc-b18a-64491241b325"
+        ],
+        "message": {
+          "assistant": {
+            "tool_calls": [
+              {
+                "id": "tc-1-0",
+                "name": "bash",
+                "arguments": "{\"command\":\"ls -F\"}"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:33.687046Z",
+      "node": {
+        "id": "c06f3105-8cc9-491d-8f02-651105e7b4ec",
+        "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+        "timestamp": "2026-06-02T08:14:33.687046Z",
+        "parent_ids": [
+          "84e9c930-d536-45b3-b2a3-3ae5973d9fd1"
+        ],
+        "message": {
+          "tool": {
+            "tool_call_id": "tc-1-0",
+            "name": "bash",
+            "parts": [
+              {
+                "text": {
+                  "text": "go.mod\ngo.sum\nharness.go\nmain.go\nollama.go\nsgp-harness-bash*\ntools.go\n"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:42.940487Z",
+      "node": {
+        "id": "d0633281-074e-418c-bd35-83c7aa32968d",
+        "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+        "timestamp": "2026-06-02T08:14:42.940487Z",
+        "parent_ids": [
+          "c06f3105-8cc9-491d-8f02-651105e7b4ec"
+        ],
+        "message": {
+          "assistant": {
+            "parts": [
+              {
+                "text": {
+                  "text": "The files in the current directory are:\n\n* `go.mod`\n* `go.sum`\n* `harness.go`\n* `main.go`\n* `ollama.go`\n* `sgp-harness-bash` (executable)\n* `tools.go`"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "session.ended",
+      "session_id": "39934de4-4a4c-4a95-a420-c84998138b38",
+      "timestamp": "2026-06-02T08:14:42.942063Z",
+      "terminal_node_id": "d0633281-074e-418c-bd35-83c7aa32968d"
+    }
+  ],
+  "head_id": "d0633281-074e-418c-bd35-83c7aa32968d",
+  "terminal_node_id": "d0633281-074e-418c-bd35-83c7aa32968d",
+  "closed": true
+}

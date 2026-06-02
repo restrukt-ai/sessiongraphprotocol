@@ -55,8 +55,8 @@ func TestExecuteFunctionCallsPrunesSingleFailedTool(t *testing.T) {
 	if !ok {
 		t.Fatal("Head() returned no head")
 	}
-	if got := head.Metadata["kind"]; got != "failed_tool_pruned" {
-		t.Fatalf("head.Metadata[kind] = %v, want failed_tool_pruned", got)
+	if len(head.SynthesizedFrom) == 0 {
+		t.Fatalf("expected pruned head to have SynthesizedFrom set")
 	}
 }
 
@@ -104,11 +104,8 @@ func TestExecuteFunctionCallsSummarizesParallelBatch(t *testing.T) {
 	if !ok {
 		t.Fatal("Head() returned no head")
 	}
-	if got := head.Metadata["kind"]; got != "parallel_tool_summary" {
-		t.Fatalf("head.Metadata[kind] = %v, want parallel_tool_summary", got)
-	}
-	if got := head.Metadata["branches"]; got != 2 {
-		t.Fatalf("head.Metadata[branches] = %v, want 2", got)
+	if len(head.SynthesizedFrom) != 2 {
+		t.Fatalf("head.SynthesizedFrom len = %d, want 2", len(head.SynthesizedFrom))
 	}
 }
 

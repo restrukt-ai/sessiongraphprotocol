@@ -1,0 +1,230 @@
+{
+  "version": 1,
+  "session": {
+    "id": "bc329273-1f26-4318-984e-7cbfa5741272",
+    "timestamp": "2026-06-02T08:12:55.409101Z"
+  },
+  "event_names": {
+    "SessionStart": "session.start",
+    "NodeAppended": "node.appended",
+    "HistoryRewritten": "history.rewritten",
+    "SessionEnded": "session.ended"
+  },
+  "nodes": [
+    {
+      "id": "aee40371-f837-4202-9820-f2e81911a3ca",
+      "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+      "timestamp": "2026-06-02T08:12:55.409164Z",
+      "parent_ids": null,
+      "message": {
+        "system": {
+          "text": "You are a helpful assistant with access to bash. Use the bash tool to execute commands when needed."
+        }
+      }
+    },
+    {
+      "id": "74b0471b-4f64-481d-b1aa-936b8a2080ac",
+      "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+      "timestamp": "2026-06-02T08:12:55.409826Z",
+      "parent_ids": [
+        "aee40371-f837-4202-9820-f2e81911a3ca"
+      ],
+      "message": {
+        "user": {
+          "parts": [
+            {
+              "text": {
+                "text": "hello"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ea787bec-fba5-4055-b6c1-f9b4b68d3bfe",
+      "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+      "timestamp": "2026-06-02T08:13:01.414235Z",
+      "parent_ids": [
+        "74b0471b-4f64-481d-b1aa-936b8a2080ac"
+      ],
+      "message": {
+        "assistant": {
+          "parts": [
+            {
+              "text": {
+                "text": "{\"name\": \"Run a shell command and return combined stdout+stderr\", \"parameters\": {\"command\": \"echo hello\"}}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "bb24910e-98a3-4681-8d0c-6e50a742cc8d",
+      "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+      "timestamp": "2026-06-02T08:13:01.415212Z",
+      "parent_ids": [
+        "ea787bec-fba5-4055-b6c1-f9b4b68d3bfe"
+      ],
+      "message": {
+        "user": {
+          "parts": [
+            {
+              "text": {
+                "text": "what files are in your current directory?"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cf10f6fc-2d98-4a05-a5c4-dc6065196e2d",
+      "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+      "timestamp": "2026-06-02T08:13:01.879273Z",
+      "parent_ids": [
+        "bb24910e-98a3-4681-8d0c-6e50a742cc8d"
+      ],
+      "message": {
+        "assistant": {
+          "parts": [
+            {
+              "text": {
+                "text": "{\"name\": \"Run a shell command and return combined stdout+stderr\", \"parameters\": {\"command\": [\"ls\", \"-l\"]}}"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "events": [
+    {
+      "event": "session.start",
+      "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+      "timestamp": "2026-06-02T08:12:55.409101Z"
+    },
+    {
+      "event": "node.appended",
+      "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+      "timestamp": "2026-06-02T08:12:55.409164Z",
+      "node": {
+        "id": "aee40371-f837-4202-9820-f2e81911a3ca",
+        "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+        "timestamp": "2026-06-02T08:12:55.409164Z",
+        "parent_ids": null,
+        "message": {
+          "system": {
+            "text": "You are a helpful assistant with access to bash. Use the bash tool to execute commands when needed."
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+      "timestamp": "2026-06-02T08:12:55.409826Z",
+      "node": {
+        "id": "74b0471b-4f64-481d-b1aa-936b8a2080ac",
+        "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+        "timestamp": "2026-06-02T08:12:55.409826Z",
+        "parent_ids": [
+          "aee40371-f837-4202-9820-f2e81911a3ca"
+        ],
+        "message": {
+          "user": {
+            "parts": [
+              {
+                "text": {
+                  "text": "hello"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+      "timestamp": "2026-06-02T08:13:01.414235Z",
+      "node": {
+        "id": "ea787bec-fba5-4055-b6c1-f9b4b68d3bfe",
+        "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+        "timestamp": "2026-06-02T08:13:01.414235Z",
+        "parent_ids": [
+          "74b0471b-4f64-481d-b1aa-936b8a2080ac"
+        ],
+        "message": {
+          "assistant": {
+            "parts": [
+              {
+                "text": {
+                  "text": "{\"name\": \"Run a shell command and return combined stdout+stderr\", \"parameters\": {\"command\": \"echo hello\"}}"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+      "timestamp": "2026-06-02T08:13:01.415212Z",
+      "node": {
+        "id": "bb24910e-98a3-4681-8d0c-6e50a742cc8d",
+        "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+        "timestamp": "2026-06-02T08:13:01.415212Z",
+        "parent_ids": [
+          "ea787bec-fba5-4055-b6c1-f9b4b68d3bfe"
+        ],
+        "message": {
+          "user": {
+            "parts": [
+              {
+                "text": {
+                  "text": "what files are in your current directory?"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+      "timestamp": "2026-06-02T08:13:01.879273Z",
+      "node": {
+        "id": "cf10f6fc-2d98-4a05-a5c4-dc6065196e2d",
+        "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+        "timestamp": "2026-06-02T08:13:01.879273Z",
+        "parent_ids": [
+          "bb24910e-98a3-4681-8d0c-6e50a742cc8d"
+        ],
+        "message": {
+          "assistant": {
+            "parts": [
+              {
+                "text": {
+                  "text": "{\"name\": \"Run a shell command and return combined stdout+stderr\", \"parameters\": {\"command\": [\"ls\", \"-l\"]}}"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "session.ended",
+      "session_id": "bc329273-1f26-4318-984e-7cbfa5741272",
+      "timestamp": "2026-06-02T08:13:01.879789Z",
+      "terminal_node_id": "cf10f6fc-2d98-4a05-a5c4-dc6065196e2d"
+    }
+  ],
+  "head_id": "cf10f6fc-2d98-4a05-a5c4-dc6065196e2d",
+  "terminal_node_id": "cf10f6fc-2d98-4a05-a5c4-dc6065196e2d",
+  "closed": true
+}

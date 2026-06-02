@@ -1,0 +1,144 @@
+{
+  "version": 1,
+  "session": {
+    "id": "c55da09c-ae5a-4635-8ee1-d4f920aaa4a0",
+    "timestamp": "2026-06-02T08:57:02.706235Z"
+  },
+  "event_names": {
+    "SessionStart": "session.start",
+    "NodeAppended": "node.appended",
+    "HistoryRewritten": "history.rewritten",
+    "SessionEnded": "session.ended"
+  },
+  "nodes": [
+    {
+      "id": "50f12182-607c-4c31-86bc-4f0199cdffa7",
+      "session_id": "c55da09c-ae5a-4635-8ee1-d4f920aaa4a0",
+      "timestamp": "2026-06-02T08:57:02.706299Z",
+      "parent_ids": null,
+      "message": {
+        "system": {
+          "text": "You are a helpful math assistant. Use the calculate tool to evaluate mathematical expressions."
+        }
+      }
+    },
+    {
+      "id": "5be20ecc-8463-4798-9dbb-e5f4f076697f",
+      "session_id": "c55da09c-ae5a-4635-8ee1-d4f920aaa4a0",
+      "timestamp": "2026-06-02T08:57:02.706978Z",
+      "parent_ids": [
+        "50f12182-607c-4c31-86bc-4f0199cdffa7"
+      ],
+      "message": {
+        "user": {
+          "parts": [
+            {
+              "text": {
+                "text": "solve all the math problems in /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/homework.txt"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "513f9cc8-0a2c-43bb-ae73-e4dcef0a8b32",
+      "session_id": "c55da09c-ae5a-4635-8ee1-d4f920aaa4a0",
+      "timestamp": "2026-06-02T09:00:09.472152Z",
+      "parent_ids": [
+        "5be20ecc-8463-4798-9dbb-e5f4f076697f"
+      ],
+      "message": {
+        "assistant": {
+          "parts": [
+            {
+              "text": {
+                "text": "I'm sorry, but I don't have the ability to access or read files directly from your local file system. Please copy and paste the math problems from the `/Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/homework.txt` file into the chat, and I'll be happy to solve them for you!"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "events": [
+    {
+      "event": "session.start",
+      "session_id": "c55da09c-ae5a-4635-8ee1-d4f920aaa4a0",
+      "timestamp": "2026-06-02T08:57:02.706235Z"
+    },
+    {
+      "event": "node.appended",
+      "session_id": "c55da09c-ae5a-4635-8ee1-d4f920aaa4a0",
+      "timestamp": "2026-06-02T08:57:02.706299Z",
+      "node": {
+        "id": "50f12182-607c-4c31-86bc-4f0199cdffa7",
+        "session_id": "c55da09c-ae5a-4635-8ee1-d4f920aaa4a0",
+        "timestamp": "2026-06-02T08:57:02.706299Z",
+        "parent_ids": null,
+        "message": {
+          "system": {
+            "text": "You are a helpful math assistant. Use the calculate tool to evaluate mathematical expressions."
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "c55da09c-ae5a-4635-8ee1-d4f920aaa4a0",
+      "timestamp": "2026-06-02T08:57:02.706978Z",
+      "node": {
+        "id": "5be20ecc-8463-4798-9dbb-e5f4f076697f",
+        "session_id": "c55da09c-ae5a-4635-8ee1-d4f920aaa4a0",
+        "timestamp": "2026-06-02T08:57:02.706978Z",
+        "parent_ids": [
+          "50f12182-607c-4c31-86bc-4f0199cdffa7"
+        ],
+        "message": {
+          "user": {
+            "parts": [
+              {
+                "text": {
+                  "text": "solve all the math problems in /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/homework.txt"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "c55da09c-ae5a-4635-8ee1-d4f920aaa4a0",
+      "timestamp": "2026-06-02T09:00:09.472152Z",
+      "node": {
+        "id": "513f9cc8-0a2c-43bb-ae73-e4dcef0a8b32",
+        "session_id": "c55da09c-ae5a-4635-8ee1-d4f920aaa4a0",
+        "timestamp": "2026-06-02T09:00:09.472152Z",
+        "parent_ids": [
+          "5be20ecc-8463-4798-9dbb-e5f4f076697f"
+        ],
+        "message": {
+          "assistant": {
+            "parts": [
+              {
+                "text": {
+                  "text": "I'm sorry, but I don't have the ability to access or read files directly from your local file system. Please copy and paste the math problems from the `/Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/homework.txt` file into the chat, and I'll be happy to solve them for you!"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "session.ended",
+      "session_id": "c55da09c-ae5a-4635-8ee1-d4f920aaa4a0",
+      "timestamp": "2026-06-02T09:00:09.472892Z",
+      "terminal_node_id": "513f9cc8-0a2c-43bb-ae73-e4dcef0a8b32"
+    }
+  ],
+  "head_id": "513f9cc8-0a2c-43bb-ae73-e4dcef0a8b32",
+  "terminal_node_id": "513f9cc8-0a2c-43bb-ae73-e4dcef0a8b32",
+  "closed": true
+}

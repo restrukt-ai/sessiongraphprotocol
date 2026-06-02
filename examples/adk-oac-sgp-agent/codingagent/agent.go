@@ -17,10 +17,7 @@ type Agent struct {
 func New(systemPrompt string, options ...sgp.Option) (*Agent, sgp.Node, error) {
 	graph := sgp.NewGraph(options...)
 
-	root, _, err := graph.Append(sgp.Message{
-		Role:    sgp.MessageRoleSystem,
-		Content: systemPrompt,
-	}, map[string]any{"kind": "system_prompt"})
+	root, _, err := graph.Append(sgp.Message{System: &sgp.SystemMessage{Text: systemPrompt}})
 	if err != nil {
 		return nil, sgp.Node{}, err
 	}
@@ -35,10 +32,10 @@ func (agent *Agent) Graph() *sgp.Graph {
 
 // AddUserTask appends a user task to the canonical history.
 func (agent *Agent) AddUserTask(parentID sgp.ID, task string) (sgp.Node, error) {
-	node, _, err := agent.graph.Append(sgp.Message{
-		Role:    sgp.MessageRoleUser,
-		Content: task,
-	}, map[string]any{"kind": "coding_task"}, parentID)
+	node, _, err := agent.graph.Append(
+		sgp.Message{User: &sgp.UserMessage{Parts: []sgp.ContentPart{{Text: &sgp.TextPart{Text: task}}}}},
+		parentID,
+	)
 	if err != nil {
 		return sgp.Node{}, err
 	}
@@ -48,10 +45,10 @@ func (agent *Agent) AddUserTask(parentID sgp.ID, task string) (sgp.Node, error) 
 
 // AddAssistantPlan appends an assistant planning node.
 func (agent *Agent) AddAssistantPlan(parentID sgp.ID, plan string) (sgp.Node, error) {
-	node, _, err := agent.graph.Append(sgp.Message{
-		Role:    sgp.MessageRoleAssistant,
-		Content: plan,
-	}, map[string]any{"kind": "plan"}, parentID)
+	node, _, err := agent.graph.Append(
+		sgp.Message{Assistant: &sgp.AssistantMessage{Parts: []sgp.ContentPart{{Text: &sgp.TextPart{Text: plan}}}}},
+		parentID,
+	)
 	if err != nil {
 		return sgp.Node{}, err
 	}
@@ -62,16 +59,14 @@ func (agent *Agent) AddAssistantPlan(parentID sgp.ID, plan string) (sgp.Node, er
 // AddToolResult appends a tool result. Multiple calls against the same parent
 // model parallel tool calls as sibling leaves.
 func (agent *Agent) AddToolResult(parentID sgp.ID, toolName string, output string, success bool) (sgp.Node, error) {
-	metadata := map[string]any{
-		"kind":    "tool_result",
-		"tool":    toolName,
-		"success": success,
-	}
-
-	node, _, err := agent.graph.Append(sgp.Message{
-		Role:    sgp.MessageRoleTool,
-		Content: output,
-	}, metadata, parentID)
+	node, _, err := agent.graph.Append(
+		sgp.Message{Tool: &sgp.ToolMessage{
+			Name:    toolName,
+			Parts:   []sgp.ContentPart{{Text: &sgp.TextPart{Text: output}}},
+			IsError: !success,
+		}},
+		parentID,
+	)
 	if err != nil {
 		return sgp.Node{}, err
 	}
@@ -88,18 +83,15 @@ func (agent *Agent) SpawnSubagent(parentNodeID sgp.ID, systemPrompt string, task
 		}),
 	)
 
-	root, _, err := subgraph.Append(sgp.Message{
-		Role:    sgp.MessageRoleSystem,
-		Content: systemPrompt,
-	}, map[string]any{"kind": "subagent_system"})
+	root, _, err := subgraph.Append(sgp.Message{System: &sgp.SystemMessage{Text: systemPrompt}})
 	if err != nil {
 		return nil, sgp.Node{}, sgp.Node{}, err
 	}
 
-	userTask, _, err := subgraph.Append(sgp.Message{
-		Role:    sgp.MessageRoleUser,
-		Content: task,
-	}, map[string]any{"kind": "subagent_task"}, root.ID)
+	userTask, _, err := subgraph.Append(
+		sgp.Message{User: &sgp.UserMessage{Parts: []sgp.ContentPart{{Text: &sgp.TextPart{Text: task}}}}},
+		root.ID,
+	)
 	if err != nil {
 		return nil, sgp.Node{}, sgp.Node{}, err
 	}
@@ -110,13 +102,11 @@ func (agent *Agent) SpawnSubagent(parentNodeID sgp.ID, systemPrompt string, task
 // PruneFailedToolCall rewrites history so a failed tool-result leaf is retained
 // only as audit provenance and no longer sits on the canonical resume path.
 func (agent *Agent) PruneFailedToolCall(canonicalParentID, failedToolNodeID sgp.ID, summary string) (sgp.Node, error) {
-	node, _, err := agent.graph.Rewrite(sgp.Message{
-		Role:    sgp.MessageRoleAssistant,
-		Content: summary,
-	}, map[string]any{
-		"kind":   "failed_tool_pruned",
-		"reason": "tool_failure",
-	}, canonicalParentID, failedToolNodeID)
+	node, _, err := agent.graph.Rewrite(
+		sgp.Message{Assistant: &sgp.AssistantMessage{Parts: []sgp.ContentPart{{Text: &sgp.TextPart{Text: summary}}}}},
+		canonicalParentID,
+		failedToolNodeID,
+	)
 	if err != nil {
 		return sgp.Node{}, fmt.Errorf("prune failed tool call: %w", err)
 	}
@@ -127,13 +117,11 @@ func (agent *Agent) PruneFailedToolCall(canonicalParentID, failedToolNodeID sgp.
 // SummarizeParallelToolCalls rewrites sibling tool leaves into one assistant
 // summary node so future inference resumes from compacted canonical history.
 func (agent *Agent) SummarizeParallelToolCalls(canonicalParentID sgp.ID, summary string, branchTipIDs ...sgp.ID) (sgp.Node, error) {
-	node, _, err := agent.graph.Rewrite(sgp.Message{
-		Role:    sgp.MessageRoleAssistant,
-		Content: summary,
-	}, map[string]any{
-		"kind":     "parallel_tool_summary",
-		"branches": len(branchTipIDs),
-	}, canonicalParentID, branchTipIDs...)
+	node, _, err := agent.graph.Rewrite(
+		sgp.Message{Assistant: &sgp.AssistantMessage{Parts: []sgp.ContentPart{{Text: &sgp.TextPart{Text: summary}}}}},
+		canonicalParentID,
+		branchTipIDs...,
+	)
 	if err != nil {
 		return sgp.Node{}, fmt.Errorf("summarize parallel tool calls: %w", err)
 	}

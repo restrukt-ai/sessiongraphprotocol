@@ -170,11 +170,11 @@ func (graph *Graph) Node(nodeID ID) (Node, error) {
 }
 
 // Append creates a new node and emits a node appended event.
-func (graph *Graph) Append(message Message, metadata map[string]any, parentIDs ...ID) (Node, Event, error) {
+func (graph *Graph) Append(message Message, parentIDs ...ID) (Node, Event, error) {
 	graph.mu.Lock()
 	defer graph.mu.Unlock()
 
-	node, event, err := graph.appendNode(EventKindNodeAppended, message, metadata, parentIDs, nil)
+	node, event, err := graph.appendNode(EventKindNodeAppended, message, parentIDs, nil)
 	if err != nil {
 		return Node{}, Event{}, err
 	}
@@ -183,7 +183,7 @@ func (graph *Graph) Append(message Message, metadata map[string]any, parentIDs .
 }
 
 // Rewrite creates a rewrite node and emits a history rewritten event.
-func (graph *Graph) Rewrite(message Message, metadata map[string]any, parentID ID, synthesizedFrom ...ID) (Node, Event, error) {
+func (graph *Graph) Rewrite(message Message, parentID ID, synthesizedFrom ...ID) (Node, Event, error) {
 	graph.mu.Lock()
 	defer graph.mu.Unlock()
 
@@ -198,7 +198,6 @@ func (graph *Graph) Rewrite(message Message, metadata map[string]any, parentID I
 	node, event, err := graph.appendNode(
 		EventKindHistoryRewritten,
 		message,
-		metadata,
 		[]ID{parentID},
 		synthesizedFrom,
 	)
@@ -276,13 +275,12 @@ func (graph *Graph) NeedsResponse(nodeID ID) (bool, error) {
 		return false, fmt.Errorf("%w: %s", ErrNodeNotFound, nodeID)
 	}
 
-	return len(graph.children[nodeID]) == 0 && requiresResponse(node.Message.Role), nil
+	return len(graph.children[nodeID]) == 0 && requiresResponse(node.Message), nil
 }
 
 func (graph *Graph) appendNode(
 	kind EventKind,
 	message Message,
-	metadata map[string]any,
 	parentIDs []ID,
 	synthesizedFrom []ID,
 ) (Node, Event, error) {
@@ -294,8 +292,8 @@ func (graph *Graph) appendNode(
 		return Node{}, Event{}, fmt.Errorf("missing event name for kind %d", kind)
 	}
 
-	if message.Role == "" {
-		return Node{}, Event{}, errors.New("message role is required")
+	if !message.valid() {
+		return Node{}, Event{}, errors.New("message must have exactly one subtype set")
 	}
 
 	if len(parentIDs) == 0 && len(graph.nodes) != 0 {
@@ -318,8 +316,7 @@ func (graph *Graph) appendNode(
 		Timestamp:       time.Now().UTC(),
 		ParentIDs:       validatedParents,
 		SynthesizedFrom: validatedSources,
-		Message:         message,
-		Metadata:        copyMetadata(metadata),
+		Message:         copyMessage(message),
 	}
 
 	graph.nodes[node.ID] = copyNode(node)
@@ -391,8 +388,8 @@ func (graph *Graph) resumeNodes(nodeID ID) ([]Node, error) {
 	return lineage, nil
 }
 
-func requiresResponse(role MessageRole) bool {
-	return role == MessageRoleUser || role == MessageRoleTool
+func requiresResponse(msg Message) bool {
+	return msg.User != nil || msg.Tool != nil
 }
 
 func copyNode(node Node) Node {
@@ -403,21 +400,97 @@ func copyNode(node Node) Node {
 		ParentIDs:       append([]ID(nil), node.ParentIDs...),
 		SynthesizedFrom: append([]ID(nil), node.SynthesizedFrom...),
 		Message:         node.Message,
-		Metadata:        copyMetadata(node.Metadata),
 	}
 }
 
-func copyMetadata(metadata map[string]any) map[string]any {
-	if len(metadata) == 0 {
+func copyMessage(msg Message) Message {
+	return Message{
+		System:    copySystemMessage(msg.System),
+		User:      copyUserMessage(msg.User),
+		Assistant: copyAssistantMessage(msg.Assistant),
+		Tool:      copyToolMessage(msg.Tool),
+	}
+}
+
+func copySystemMessage(m *SystemMessage) *SystemMessage {
+	if m == nil {
 		return nil
 	}
+	cp := *m
+	return &cp
+}
 
-	cloned := make(map[string]any, len(metadata))
-	for key, value := range metadata {
-		cloned[key] = value
+func copyUserMessage(m *UserMessage) *UserMessage {
+	if m == nil {
+		return nil
 	}
+	return &UserMessage{Parts: copyContentParts(m.Parts)}
+}
 
-	return cloned
+func copyAssistantMessage(m *AssistantMessage) *AssistantMessage {
+	if m == nil {
+		return nil
+	}
+	cp := &AssistantMessage{Refusal: m.Refusal}
+	cp.Parts = copyContentParts(m.Parts)
+	if len(m.ToolCalls) > 0 {
+		cp.ToolCalls = make([]ToolCall, len(m.ToolCalls))
+		copy(cp.ToolCalls, m.ToolCalls)
+	}
+	return cp
+}
+
+func copyToolMessage(m *ToolMessage) *ToolMessage {
+	if m == nil {
+		return nil
+	}
+	return &ToolMessage{
+		ToolCallID: m.ToolCallID,
+		Name:       m.Name,
+		Parts:      copyContentParts(m.Parts),
+		IsError:    m.IsError,
+	}
+}
+
+func copyContentParts(parts []ContentPart) []ContentPart {
+	if len(parts) == 0 {
+		return nil
+	}
+	cp := make([]ContentPart, len(parts))
+	for i, part := range parts {
+		cp[i] = copyContentPart(part)
+	}
+	return cp
+}
+
+func copyContentPart(part ContentPart) ContentPart {
+	var cp ContentPart
+	if part.Text != nil {
+		v := *part.Text
+		cp.Text = &v
+	}
+	if part.Image != nil {
+		cp.Image = &ImagePart{BlobPart: copyBlobPart(part.Image.BlobPart)}
+	}
+	if part.Audio != nil {
+		cp.Audio = &AudioPart{BlobPart: copyBlobPart(part.Audio.BlobPart)}
+	}
+	if part.Video != nil {
+		cp.Video = &VideoPart{BlobPart: copyBlobPart(part.Video.BlobPart)}
+	}
+	if part.File != nil {
+		cp.File = &FilePart{BlobPart: copyBlobPart(part.File.BlobPart), Name: part.File.Name}
+	}
+	return cp
+}
+
+func copyBlobPart(b BlobPart) BlobPart {
+	if len(b.Data) == 0 {
+		return BlobPart{MimeType: b.MimeType}
+	}
+	data := make([]byte, len(b.Data))
+	copy(data, b.Data)
+	return BlobPart{MimeType: b.MimeType, Data: data}
 }
 
 func copySpawnReference(reference *SpawnReference) *SpawnReference {

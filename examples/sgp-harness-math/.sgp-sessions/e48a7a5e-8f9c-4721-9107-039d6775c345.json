@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "session": {
+    "id": "e48a7a5e-8f9c-4721-9107-039d6775c345",
+    "timestamp": "2026-06-02T09:00:13.700278Z"
+  },
+  "event_names": {
+    "SessionStart": "session.start",
+    "NodeAppended": "node.appended",
+    "HistoryRewritten": "history.rewritten",
+    "SessionEnded": "session.ended"
+  },
+  "nodes": [
+    {
+      "id": "ba46aef0-d769-4d1f-881d-b663c3c9d7ee",
+      "session_id": "e48a7a5e-8f9c-4721-9107-039d6775c345",
+      "timestamp": "2026-06-02T09:00:13.700292Z",
+      "parent_ids": null,
+      "message": {
+        "system": {
+          "text": "You are a helpful math assistant. Use the calculate tool to evaluate mathematical expressions."
+        }
+      }
+    },
+    {
+      "id": "d3907fd4-af6c-40c0-a500-0e0d58fba065",
+      "session_id": "e48a7a5e-8f9c-4721-9107-039d6775c345",
+      "timestamp": "2026-06-02T09:00:13.700702Z",
+      "parent_ids": [
+        "ba46aef0-d769-4d1f-881d-b663c3c9d7ee"
+      ],
+      "message": {
+        "user": {
+          "parts": [
+            {
+              "text": {
+                "text": "solve these math problems:"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "events": [
+    {
+      "event": "session.start",
+      "session_id": "e48a7a5e-8f9c-4721-9107-039d6775c345",
+      "timestamp": "2026-06-02T09:00:13.700278Z"
+    },
+    {
+      "event": "node.appended",
+      "session_id": "e48a7a5e-8f9c-4721-9107-039d6775c345",
+      "timestamp": "2026-06-02T09:00:13.700292Z",
+      "node": {
+        "id": "ba46aef0-d769-4d1f-881d-b663c3c9d7ee",
+        "session_id": "e48a7a5e-8f9c-4721-9107-039d6775c345",
+        "timestamp": "2026-06-02T09:00:13.700292Z",
+        "parent_ids": null,
+        "message": {
+          "system": {
+            "text": "You are a helpful math assistant. Use the calculate tool to evaluate mathematical expressions."
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "e48a7a5e-8f9c-4721-9107-039d6775c345",
+      "timestamp": "2026-06-02T09:00:13.700702Z",
+      "node": {
+        "id": "d3907fd4-af6c-40c0-a500-0e0d58fba065",
+        "session_id": "e48a7a5e-8f9c-4721-9107-039d6775c345",
+        "timestamp": "2026-06-02T09:00:13.700702Z",
+        "parent_ids": [
+          "ba46aef0-d769-4d1f-881d-b663c3c9d7ee"
+        ],
+        "message": {
+          "user": {
+            "parts": [
+              {
+                "text": {
+                  "text": "solve these math problems:"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "head_id": "d3907fd4-af6c-40c0-a500-0e0d58fba065",
+  "closed": false
+}

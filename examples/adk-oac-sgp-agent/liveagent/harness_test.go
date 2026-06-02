@@ -59,8 +59,8 @@ func TestHarnessHandleEventPersistsPerOACSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Node(head) error = %v", err)
 	}
-	if head.Message.Content != "ack 2: second request" {
-		t.Fatalf("head content = %v, want ack 2: second request", head.Message.Content)
+	if head.Message.TextContent() != "ack 2: second request" {
+		t.Fatalf("head content = %v, want ack 2: second request", head.Message.TextContent())
 	}
 
 	if err = harness.EndSession(context.Background(), "oac-session-1"); err != nil {

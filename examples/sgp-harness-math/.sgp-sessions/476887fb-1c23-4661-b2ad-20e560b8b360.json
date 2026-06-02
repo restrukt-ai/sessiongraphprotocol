@@ -1,0 +1,414 @@
+{
+  "version": 1,
+  "session": {
+    "id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+    "timestamp": "2026-06-02T09:05:51.165107Z"
+  },
+  "event_names": {
+    "SessionStart": "session.start",
+    "NodeAppended": "node.appended",
+    "HistoryRewritten": "history.rewritten",
+    "SessionEnded": "session.ended"
+  },
+  "nodes": [
+    {
+      "id": "d24623c6-e099-470d-b1df-d2a02563eda9",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:05:51.165207Z",
+      "parent_ids": null,
+      "message": {
+        "system": {
+          "text": "You are a helpful math assistant. Use the calculate tool to evaluate mathematical expressions.\n\nAvailable harnesses (reachable via teleport):\n- /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash: bash harness: shell access and file I/O, no math tools"
+        }
+      }
+    },
+    {
+      "id": "b6f1339b-e043-494d-bb75-dadeeb052f4c",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:05:51.165898Z",
+      "parent_ids": [
+        "d24623c6-e099-470d-b1df-d2a02563eda9"
+      ],
+      "message": {
+        "user": {
+          "parts": [
+            {
+              "text": {
+                "text": "solve all the math problems in /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/homework.txt"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "dabbb913-d9b8-49df-90fa-7b199441fbc5",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:07:35.870556Z",
+      "parent_ids": [
+        "b6f1339b-e043-494d-bb75-dadeeb052f4c"
+      ],
+      "message": {
+        "assistant": {
+          "tool_calls": [
+            {
+              "id": "tc-1-0",
+              "name": "teleport",
+              "arguments": "{\"destination\":\"/Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash\"}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "9603570f-0bc4-4f23-bfa4-3cafc71a40db",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:07:36.151556Z",
+      "parent_ids": [
+        "dabbb913-d9b8-49df-90fa-7b199441fbc5"
+      ],
+      "message": {
+        "tool": {
+          "tool_call_id": "tc-1-0",
+          "name": "teleport",
+          "parts": [
+            {
+              "text": {
+                "text": "Arrived at /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash. Tools: bash (shell), teleport (switch harness)."
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "b53980df-73ed-4f21-9fd3-80855a51e934",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:07:50.330633Z",
+      "parent_ids": [
+        "9603570f-0bc4-4f23-bfa4-3cafc71a40db"
+      ],
+      "message": {
+        "assistant": {
+          "tool_calls": [
+            {
+              "id": "tc-1-0",
+              "name": "bash",
+              "arguments": "{\"command\":\"cat /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/homework.txt\"}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "4eb29b48-be59-4fd4-ba90-73eba28a9a0f",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:07:50.345815Z",
+      "parent_ids": [
+        "b53980df-73ed-4f21-9fd3-80855a51e934"
+      ],
+      "message": {
+        "tool": {
+          "tool_call_id": "tc-1-0",
+          "name": "bash",
+          "parts": [
+            {
+              "text": {
+                "text": "1 * 1 =\n\n987 + 12 =\n\n283 / (8923 % 7) =\n"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "591d3dd8-b744-4dec-b39b-70547e77e52b",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:08:17.816144Z",
+      "parent_ids": [
+        "4eb29b48-be59-4fd4-ba90-73eba28a9a0f"
+      ],
+      "message": {
+        "assistant": {
+          "tool_calls": [
+            {
+              "id": "tc-2-0",
+              "name": "bash",
+              "arguments": "{\"command\":\"echo \\\"1 * 1\\\" | bc\\necho \\\"987 + 12\\\" | bc\\necho \\\"283 / (8923 % 7)\\\" | bc\\n\"}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ea062964-11c6-49e5-93c2-38ebbc0cbca5",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:08:17.833116Z",
+      "parent_ids": [
+        "591d3dd8-b744-4dec-b39b-70547e77e52b"
+      ],
+      "message": {
+        "tool": {
+          "tool_call_id": "tc-2-0",
+          "name": "bash",
+          "parts": [
+            {
+              "text": {
+                "text": "1\n999\n56\n"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "dfc77ac1-fbbb-490a-b309-bd85416a9b20",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:09:04.300045Z",
+      "parent_ids": [
+        "ea062964-11c6-49e5-93c2-38ebbc0cbca5"
+      ],
+      "message": {
+        "assistant": {
+          "parts": [
+            {
+              "text": {
+                "text": "The solutions to the math problems in `/Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/homework.txt` are:\n\n1 * 1 = 1\n987 + 12 = 999\n283 / (8923 % 7) = 56"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "events": [
+    {
+      "event": "session.start",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:05:51.165107Z"
+    },
+    {
+      "event": "node.appended",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:05:51.165207Z",
+      "node": {
+        "id": "d24623c6-e099-470d-b1df-d2a02563eda9",
+        "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+        "timestamp": "2026-06-02T09:05:51.165207Z",
+        "parent_ids": null,
+        "message": {
+          "system": {
+            "text": "You are a helpful math assistant. Use the calculate tool to evaluate mathematical expressions.\n\nAvailable harnesses (reachable via teleport):\n- /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash: bash harness: shell access and file I/O, no math tools"
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:05:51.165898Z",
+      "node": {
+        "id": "b6f1339b-e043-494d-bb75-dadeeb052f4c",
+        "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+        "timestamp": "2026-06-02T09:05:51.165898Z",
+        "parent_ids": [
+          "d24623c6-e099-470d-b1df-d2a02563eda9"
+        ],
+        "message": {
+          "user": {
+            "parts": [
+              {
+                "text": {
+                  "text": "solve all the math problems in /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/homework.txt"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:07:35.870556Z",
+      "node": {
+        "id": "dabbb913-d9b8-49df-90fa-7b199441fbc5",
+        "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+        "timestamp": "2026-06-02T09:07:35.870556Z",
+        "parent_ids": [
+          "b6f1339b-e043-494d-bb75-dadeeb052f4c"
+        ],
+        "message": {
+          "assistant": {
+            "tool_calls": [
+              {
+                "id": "tc-1-0",
+                "name": "teleport",
+                "arguments": "{\"destination\":\"/Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash\"}"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:07:36.151556Z",
+      "node": {
+        "id": "9603570f-0bc4-4f23-bfa4-3cafc71a40db",
+        "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+        "timestamp": "2026-06-02T09:07:36.151556Z",
+        "parent_ids": [
+          "dabbb913-d9b8-49df-90fa-7b199441fbc5"
+        ],
+        "message": {
+          "tool": {
+            "tool_call_id": "tc-1-0",
+            "name": "teleport",
+            "parts": [
+              {
+                "text": {
+                  "text": "Arrived at /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/sgp-harness-bash/sgp-harness-bash. Tools: bash (shell), teleport (switch harness)."
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:07:50.330633Z",
+      "node": {
+        "id": "b53980df-73ed-4f21-9fd3-80855a51e934",
+        "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+        "timestamp": "2026-06-02T09:07:50.330633Z",
+        "parent_ids": [
+          "9603570f-0bc4-4f23-bfa4-3cafc71a40db"
+        ],
+        "message": {
+          "assistant": {
+            "tool_calls": [
+              {
+                "id": "tc-1-0",
+                "name": "bash",
+                "arguments": "{\"command\":\"cat /Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/homework.txt\"}"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:07:50.345815Z",
+      "node": {
+        "id": "4eb29b48-be59-4fd4-ba90-73eba28a9a0f",
+        "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+        "timestamp": "2026-06-02T09:07:50.345815Z",
+        "parent_ids": [
+          "b53980df-73ed-4f21-9fd3-80855a51e934"
+        ],
+        "message": {
+          "tool": {
+            "tool_call_id": "tc-1-0",
+            "name": "bash",
+            "parts": [
+              {
+                "text": {
+                  "text": "1 * 1 =\n\n987 + 12 =\n\n283 / (8923 % 7) =\n"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:08:17.816144Z",
+      "node": {
+        "id": "591d3dd8-b744-4dec-b39b-70547e77e52b",
+        "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+        "timestamp": "2026-06-02T09:08:17.816144Z",
+        "parent_ids": [
+          "4eb29b48-be59-4fd4-ba90-73eba28a9a0f"
+        ],
+        "message": {
+          "assistant": {
+            "tool_calls": [
+              {
+                "id": "tc-2-0",
+                "name": "bash",
+                "arguments": "{\"command\":\"echo \\\"1 * 1\\\" | bc\\necho \\\"987 + 12\\\" | bc\\necho \\\"283 / (8923 % 7)\\\" | bc\\n\"}"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:08:17.833116Z",
+      "node": {
+        "id": "ea062964-11c6-49e5-93c2-38ebbc0cbca5",
+        "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+        "timestamp": "2026-06-02T09:08:17.833116Z",
+        "parent_ids": [
+          "591d3dd8-b744-4dec-b39b-70547e77e52b"
+        ],
+        "message": {
+          "tool": {
+            "tool_call_id": "tc-2-0",
+            "name": "bash",
+            "parts": [
+              {
+                "text": {
+                  "text": "1\n999\n56\n"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "node.appended",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:09:04.300045Z",
+      "node": {
+        "id": "dfc77ac1-fbbb-490a-b309-bd85416a9b20",
+        "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+        "timestamp": "2026-06-02T09:09:04.300045Z",
+        "parent_ids": [
+          "ea062964-11c6-49e5-93c2-38ebbc0cbca5"
+        ],
+        "message": {
+          "assistant": {
+            "parts": [
+              {
+                "text": {
+                  "text": "The solutions to the math problems in `/Users/brahm.lower/development/restrukt/sessiongraphprotocol/examples/homework.txt` are:\n\n1 * 1 = 1\n987 + 12 = 999\n283 / (8923 % 7) = 56"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "event": "session.ended",
+      "session_id": "476887fb-1c23-4661-b2ad-20e560b8b360",
+      "timestamp": "2026-06-02T09:09:04.301299Z",
+      "terminal_node_id": "dfc77ac1-fbbb-490a-b309-bd85416a9b20"
+    }
+  ],
+  "head_id": "dfc77ac1-fbbb-490a-b309-bd85416a9b20",
+  "terminal_node_id": "dfc77ac1-fbbb-490a-b309-bd85416a9b20",
+  "closed": true
+}

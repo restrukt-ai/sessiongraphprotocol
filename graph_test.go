@@ -36,17 +36,17 @@ func TestResumeMessagesReturnsCanonicalLineage(t *testing.T) {
 	t.Parallel()
 
 	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a", "node-b", "node-c")))
-	root, _, err := graph.Append(Message{Role: MessageRoleSystem, Content: "system"}, nil)
+	root, _, err := graph.Append(Message{System: &SystemMessage{Text: "system"}})
 	if err != nil {
 		t.Fatalf("append root: %v", err)
 	}
 
-	userNode, _, err := graph.Append(Message{Role: MessageRoleUser, Content: "hello"}, nil, root.ID)
+	userNode, _, err := graph.Append(Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "hello"}}}}}, root.ID)
 	if err != nil {
 		t.Fatalf("append user: %v", err)
 	}
 
-	assistantNode, _, err := graph.Append(Message{Role: MessageRoleAssistant, Content: "world"}, map[string]any{"model": "gpt"}, userNode.ID)
+	assistantNode, _, err := graph.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "world"}}}}}, userNode.ID)
 	if err != nil {
 		t.Fatalf("append assistant: %v", err)
 	}
@@ -60,11 +60,11 @@ func TestResumeMessagesReturnsCanonicalLineage(t *testing.T) {
 		t.Fatalf("expected 3 messages, got %d", len(messages))
 	}
 
-	if got, want := messages[0].Content, "system"; got != want {
+	if got, want := messages[0].TextContent(), "system"; got != want {
 		t.Fatalf("expected first message %q, got %v", want, got)
 	}
 
-	if got, want := messages[2].Content, "world"; got != want {
+	if got, want := messages[2].TextContent(), "world"; got != want {
 		t.Fatalf("expected final message %q, got %v", want, got)
 	}
 }
@@ -85,34 +85,33 @@ func TestRewriteKeepsBranchHistoryOutOfCanonicalResume(t *testing.T) {
 		)),
 	)
 
-	root, _, err := graph.Append(Message{Role: MessageRoleSystem, Content: "sys"}, nil)
+	root, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}})
 	if err != nil {
 		t.Fatalf("append root: %v", err)
 	}
 
-	userNode, _, err := graph.Append(Message{Role: MessageRoleUser, Content: "user"}, nil, root.ID)
+	userNode, _, err := graph.Append(Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "user"}}}}}, root.ID)
 	if err != nil {
 		t.Fatalf("append user: %v", err)
 	}
 
-	canonicalNode, _, err := graph.Append(Message{Role: MessageRoleAssistant, Content: "think"}, nil, userNode.ID)
+	canonicalNode, _, err := graph.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "think"}}}}}, userNode.ID)
 	if err != nil {
 		t.Fatalf("append canonical: %v", err)
 	}
 
-	branchOne, _, err := graph.Append(Message{Role: MessageRoleAssistant, Content: "branch one"}, nil, canonicalNode.ID)
+	branchOne, _, err := graph.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "branch one"}}}}}, canonicalNode.ID)
 	if err != nil {
 		t.Fatalf("append branch one: %v", err)
 	}
 
-	branchTwo, _, err := graph.Append(Message{Role: MessageRoleAssistant, Content: "branch two"}, nil, canonicalNode.ID)
+	branchTwo, _, err := graph.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "branch two"}}}}}, canonicalNode.ID)
 	if err != nil {
 		t.Fatalf("append branch two: %v", err)
 	}
 
 	rewriteNode, event, err := graph.Rewrite(
-		Message{Role: MessageRoleAssistant, Content: "merged"},
-		nil,
+		Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "merged"}}}}},
 		canonicalNode.ID,
 		branchOne.ID,
 		branchTwo.ID,
@@ -134,7 +133,7 @@ func TestRewriteKeepsBranchHistoryOutOfCanonicalResume(t *testing.T) {
 		t.Fatalf("expected canonical lineage length 4, got %d", len(lineage))
 	}
 
-	if got, want := lineage[3].Message.Content, "merged"; got != want {
+	if got, want := lineage[3].Message.TextContent(), "merged"; got != want {
 		t.Fatalf("expected rewrite message %q, got %v", want, got)
 	}
 
@@ -147,12 +146,12 @@ func TestNeedsResponseOnlyForDanglingUserOrToolLeaves(t *testing.T) {
 	t.Parallel()
 
 	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a", "node-b", "node-c")))
-	root, _, err := graph.Append(Message{Role: MessageRoleSystem, Content: "sys"}, nil)
+	root, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}})
 	if err != nil {
 		t.Fatalf("append root: %v", err)
 	}
 
-	userNode, _, err := graph.Append(Message{Role: MessageRoleUser, Content: "ask"}, nil, root.ID)
+	userNode, _, err := graph.Append(Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "ask"}}}}}, root.ID)
 	if err != nil {
 		t.Fatalf("append user: %v", err)
 	}
@@ -166,7 +165,7 @@ func TestNeedsResponseOnlyForDanglingUserOrToolLeaves(t *testing.T) {
 		t.Fatal("expected dangling user leaf to require a response")
 	}
 
-	_, _, err = graph.Append(Message{Role: MessageRoleAssistant, Content: "answer"}, nil, userNode.ID)
+	_, _, err = graph.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "answer"}}}}}, userNode.ID)
 	if err != nil {
 		t.Fatalf("append assistant: %v", err)
 	}
@@ -185,7 +184,7 @@ func TestEndUsesCurrentHead(t *testing.T) {
 	t.Parallel()
 
 	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
-	root, _, err := graph.Append(Message{Role: MessageRoleSystem, Content: "sys"}, nil)
+	root, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}})
 	if err != nil {
 		t.Fatalf("append root: %v", err)
 	}
@@ -199,7 +198,7 @@ func TestEndUsesCurrentHead(t *testing.T) {
 		t.Fatalf("expected terminal node %q, got %q", want, got)
 	}
 
-	if _, _, err = graph.Append(Message{Role: MessageRoleAssistant, Content: "late"}, nil, root.ID); !errors.Is(err, ErrSessionClosed) {
+	if _, _, err = graph.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "late"}}}}}, root.ID); !errors.Is(err, ErrSessionClosed) {
 		t.Fatalf("expected ErrSessionClosed, got %v", err)
 	}
 }

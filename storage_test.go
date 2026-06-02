@@ -13,7 +13,7 @@ func TestSnapshotUsesCurrentVersion(t *testing.T) {
 	t.Parallel()
 
 	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
-	if _, _, err := graph.Append(Message{Role: MessageRoleSystem, Content: "sys"}, nil); err != nil {
+	if _, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}}); err != nil {
 		t.Fatalf("append root: %v", err)
 	}
 
@@ -32,7 +32,7 @@ func TestUpgradeSnapshotAcceptsCurrentVersion(t *testing.T) {
 		Nodes: []Node{{
 			ID:        "node-a",
 			SessionID: "session-1",
-			Message:   Message{Role: MessageRoleSystem, Content: "sys"},
+			Message:   Message{System: &SystemMessage{Text: "sys"}},
 		}},
 		Events: []Event{{
 			Event:     DefaultEventNames().SessionStart,
@@ -80,13 +80,13 @@ func TestRestoreGraphWithCurrentVersionSnapshot(t *testing.T) {
 		Version: CurrentGraphSnapshotVersion,
 		Session: Session{ID: "session-1"},
 		Nodes: []Node{
-			{ID: "node-a", SessionID: "session-1", Message: Message{Role: MessageRoleSystem, Content: "sys"}},
-			{ID: "node-b", SessionID: "session-1", ParentIDs: []ID{"node-a"}, Message: Message{Role: MessageRoleUser, Content: "ask"}},
+			{ID: "node-a", SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}},
+			{ID: "node-b", SessionID: "session-1", ParentIDs: []ID{"node-a"}, Message: Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "ask"}}}}}},
 		},
 		Events: []Event{
 			{Event: DefaultEventNames().SessionStart, SessionID: "session-1"},
-			{Event: DefaultEventNames().NodeAppended, SessionID: "session-1", Node: &Node{ID: "node-a", SessionID: "session-1", Message: Message{Role: MessageRoleSystem, Content: "sys"}}},
-			{Event: DefaultEventNames().NodeAppended, SessionID: "session-1", Node: &Node{ID: "node-b", SessionID: "session-1", ParentIDs: []ID{"node-a"}, Message: Message{Role: MessageRoleUser, Content: "ask"}}},
+			{Event: DefaultEventNames().NodeAppended, SessionID: "session-1", Node: &Node{ID: "node-a", SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}}},
+			{Event: DefaultEventNames().NodeAppended, SessionID: "session-1", Node: &Node{ID: "node-b", SessionID: "session-1", ParentIDs: []ID{"node-a"}, Message: Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "ask"}}}}}}},
 		},
 		HeadID: "node-b",
 	}
@@ -133,12 +133,12 @@ func TestRestoreGraphRoundTripsSnapshot(t *testing.T) {
 		}),
 	)
 
-	root, _, err := graph.Append(Message{Role: MessageRoleSystem, Content: "sys"}, nil)
+	root, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}})
 	if err != nil {
 		t.Fatalf("append root: %v", err)
 	}
 
-	assistantNode, _, err := graph.Append(Message{Role: MessageRoleAssistant, Content: "answer"}, map[string]any{"provider": "openai"}, root.ID)
+	assistantNode, _, err := graph.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "answer"}}}}}, root.ID)
 	if err != nil {
 		t.Fatalf("append assistant: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestRestoreGraphRoundTripsSnapshot(t *testing.T) {
 		t.Fatalf("expected restored custom event name %q, got %q", want, got)
 	}
 
-	if _, _, err = restored.Append(Message{Role: MessageRoleAssistant, Content: "late"}, nil, assistantNode.ID); !errors.Is(err, ErrSessionClosed) {
+	if _, _, err = restored.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "late"}}}}}, assistantNode.ID); !errors.Is(err, ErrSessionClosed) {
 		t.Fatalf("expected restored closed graph to reject appends, got %v", err)
 	}
 }
@@ -191,7 +191,7 @@ func TestRestoreGraphRejectsInvalidSnapshots(t *testing.T) {
 			snapshot: GraphSnapshot{
 				Version: CurrentGraphSnapshotVersion,
 				Session: Session{ID: "session-1"},
-				Nodes:   []Node{{SessionID: "session-1", Message: Message{Role: MessageRoleSystem, Content: "sys"}}},
+				Nodes:   []Node{{SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}}},
 			},
 		},
 		{
@@ -199,7 +199,7 @@ func TestRestoreGraphRejectsInvalidSnapshots(t *testing.T) {
 			snapshot: GraphSnapshot{
 				Version: CurrentGraphSnapshotVersion,
 				Session: Session{ID: "session-1"},
-				Nodes:   []Node{{ID: "node-a", SessionID: "session-2", Message: Message{Role: MessageRoleSystem, Content: "sys"}}},
+				Nodes:   []Node{{ID: "node-a", SessionID: "session-2", Message: Message{System: &SystemMessage{Text: "sys"}}}},
 			},
 		},
 		{
@@ -207,7 +207,7 @@ func TestRestoreGraphRejectsInvalidSnapshots(t *testing.T) {
 			snapshot: GraphSnapshot{
 				Version: CurrentGraphSnapshotVersion,
 				Session: Session{ID: "session-1"},
-				Nodes:   []Node{{ID: "node-a", SessionID: "session-1", ParentIDs: []ID{"missing"}, Message: Message{Role: MessageRoleUser, Content: "sys"}}},
+				Nodes:   []Node{{ID: "node-a", SessionID: "session-1", ParentIDs: []ID{"missing"}, Message: Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "sys"}}}}}}},
 			},
 		},
 		{
@@ -216,8 +216,8 @@ func TestRestoreGraphRejectsInvalidSnapshots(t *testing.T) {
 				Version: CurrentGraphSnapshotVersion,
 				Session: Session{ID: "session-1"},
 				Nodes: []Node{
-					{ID: "node-a", SessionID: "session-1", Message: Message{Role: MessageRoleSystem, Content: "sys"}},
-					{ID: "node-b", SessionID: "session-1", ParentIDs: []ID{"node-a"}, SynthesizedFrom: []ID{"missing"}, Message: Message{Role: MessageRoleAssistant, Content: "merged"}},
+					{ID: "node-a", SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}},
+					{ID: "node-b", SessionID: "session-1", ParentIDs: []ID{"node-a"}, SynthesizedFrom: []ID{"missing"}, Message: Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "merged"}}}}}},
 				},
 			},
 		},
@@ -226,7 +226,7 @@ func TestRestoreGraphRejectsInvalidSnapshots(t *testing.T) {
 			snapshot: GraphSnapshot{
 				Version: CurrentGraphSnapshotVersion,
 				Session: Session{ID: "session-1"},
-				Nodes:   []Node{{ID: "node-a", SessionID: "session-1", Message: Message{Role: MessageRoleSystem, Content: "sys"}}},
+				Nodes:   []Node{{ID: "node-a", SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}}},
 				HeadID:  "missing",
 			},
 		},
@@ -235,7 +235,7 @@ func TestRestoreGraphRejectsInvalidSnapshots(t *testing.T) {
 			snapshot: GraphSnapshot{
 				Version:        CurrentGraphSnapshotVersion,
 				Session:        Session{ID: "session-1"},
-				Nodes:          []Node{{ID: "node-a", SessionID: "session-1", Message: Message{Role: MessageRoleSystem, Content: "sys"}}},
+				Nodes:          []Node{{ID: "node-a", SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}}},
 				TerminalNodeID: "missing",
 			},
 		},
@@ -288,7 +288,7 @@ func TestJSONFileStoreHonorsCanceledContext(t *testing.T) {
 	cancel()
 
 	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
-	if _, _, err = graph.Append(Message{Role: MessageRoleSystem, Content: "sys"}, nil); err != nil {
+	if _, _, err = graph.Append(Message{System: &SystemMessage{Text: "sys"}}); err != nil {
 		t.Fatalf("append root: %v", err)
 	}
 
@@ -311,7 +311,7 @@ func TestJSONFileStoreWritesVersionedJSON(t *testing.T) {
 	}
 
 	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
-	if _, _, err = graph.Append(Message{Role: MessageRoleSystem, Content: "sys"}, nil); err != nil {
+	if _, _, err = graph.Append(Message{System: &SystemMessage{Text: "sys"}}); err != nil {
 		t.Fatalf("append root: %v", err)
 	}
 
@@ -348,7 +348,7 @@ func TestJSONFileStoreRejectsSnapshotWithoutVersion(t *testing.T) {
 		Nodes: []Node{{
 			ID:        "node-a",
 			SessionID: "legacy/session",
-			Message:   Message{Role: MessageRoleSystem, Content: "sys"},
+			Message:   Message{System: &SystemMessage{Text: "sys"}},
 		}},
 		Events: []Event{{Event: DefaultEventNames().SessionStart, SessionID: "legacy/session"}},
 		HeadID: "node-a",
@@ -378,12 +378,12 @@ func TestJSONFileStoreRoundTrip(t *testing.T) {
 	}
 
 	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a", "node-b")))
-	root, _, err := graph.Append(Message{Role: MessageRoleSystem, Content: "sys"}, nil)
+	root, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}})
 	if err != nil {
 		t.Fatalf("append root: %v", err)
 	}
 
-	userNode, _, err := graph.Append(Message{Role: MessageRoleUser, Content: "hello"}, nil, root.ID)
+	userNode, _, err := graph.Append(Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "hello"}}}}}, root.ID)
 	if err != nil {
 		t.Fatalf("append user: %v", err)
 	}

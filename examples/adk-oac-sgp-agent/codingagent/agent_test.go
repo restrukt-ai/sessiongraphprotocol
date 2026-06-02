@@ -139,8 +139,8 @@ func TestSummarizeParallelToolCallsRewritesSiblingLeaves(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Node() error = %v", err)
 	}
-	if storedSummary.Message.Role != sgp.MessageRoleAssistant {
-		t.Fatalf("summary role = %s, want assistant", storedSummary.Message.Role)
+	if storedSummary.Message.Role() != sgp.MessageRoleAssistant {
+		t.Fatalf("summary role = %s, want assistant", storedSummary.Message.Role())
 	}
 	if len(storedSummary.ParentIDs) != 1 || storedSummary.ParentIDs[0] != planNode.ID {
 		t.Fatalf("summary parent_ids = %v, want [%s]", storedSummary.ParentIDs, planNode.ID)
