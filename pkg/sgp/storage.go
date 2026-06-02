@@ -60,6 +60,7 @@ type GraphSnapshot struct {
 	Events         []Event    `json:"events"`
 	HeadID         ID         `json:"head_id,omitempty"`
 	TerminalNodeID ID         `json:"terminal_node_id,omitempty"`
+	Started        bool       `json:"started"`
 	Closed         bool       `json:"closed"`
 	EndReason      EndReason  `json:"end_reason,omitempty"`
 }
@@ -77,6 +78,7 @@ func (graph *Graph) Snapshot() GraphSnapshot {
 		Events:         copyEvents(graph.events),
 		HeadID:         graph.headID,
 		TerminalNodeID: graph.terminalNodeID,
+		Started:        graph.started,
 		Closed:         graph.closed,
 		EndReason:      graph.endReason,
 	}
@@ -100,6 +102,20 @@ func RestoreGraph(snapshot GraphSnapshot) (*Graph, error) {
 		eventNames = DefaultEventNames()
 	}
 
+	// Infer started from the event log when the snapshot field is absent (false).
+	// Snapshots written before the Started field was added always contain a
+	// session.start event because NewGraph used to auto-emit it, so the
+	// inference provides backward compatibility without a version bump.
+	started := snapshot.Started
+	if !started {
+		for _, event := range snapshot.Events {
+			if event.Event == eventNames.SessionStart {
+				started = true
+				break
+			}
+		}
+	}
+
 	graph := &Graph{
 		session: Session{
 			ID:          snapshot.Session.ID,
@@ -115,6 +131,7 @@ func RestoreGraph(snapshot GraphSnapshot) (*Graph, error) {
 		events:         copyEvents(snapshot.Events),
 		headID:         snapshot.HeadID,
 		terminalNodeID: snapshot.TerminalNodeID,
+		started:        started,
 		endReason:      snapshot.EndReason,
 		closed:         snapshot.Closed,
 	}

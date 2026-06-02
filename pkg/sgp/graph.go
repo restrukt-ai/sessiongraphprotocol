@@ -13,6 +13,10 @@ import (
 var (
 	// ErrSessionClosed indicates that the graph has already emitted a terminal event.
 	ErrSessionClosed = errors.New("session graph is closed")
+	// ErrSessionNotStarted indicates that Start has not been called on the graph.
+	ErrSessionNotStarted = errors.New("session graph has not been started")
+	// ErrSessionAlreadyStarted indicates that Start was called on a graph that has already started.
+	ErrSessionAlreadyStarted = errors.New("session graph has already been started")
 	// ErrNodeNotFound indicates that the requested node does not exist.
 	ErrNodeNotFound = errors.New("node not found")
 	// ErrInvalidRoot indicates that a root append was attempted after initialization.
@@ -77,10 +81,13 @@ type Graph struct {
 	headID         ID
 	terminalNodeID ID
 	endReason      EndReason
+	started        bool
 	closed         bool
 }
 
-// NewGraph creates a new in-memory session graph and emits a session start event.
+// NewGraph creates a new in-memory session graph. Call [Graph.Start] to formally
+// begin the session and emit the session.start event. Append, Rewrite, and End
+// all require Start to have been called first.
 func NewGraph(options ...Option) *Graph {
 	cfg := config{
 		idGenerator: func() ID {
@@ -97,10 +104,9 @@ func NewGraph(options ...Option) *Graph {
 		cfg.sessionID = cfg.idGenerator()
 	}
 
-	graph := &Graph{
+	return &Graph{
 		session: Session{
 			ID:          cfg.sessionID,
-			Timestamp:   time.Now().UTC(),
 			SpawnedFrom: copySpawnReference(cfg.spawnedFrom),
 		},
 		eventNames:  cfg.eventNames,
@@ -108,16 +114,37 @@ func NewGraph(options ...Option) *Graph {
 		nodes:       make(map[ID]Node),
 		children:    make(map[ID][]ID),
 	}
+}
 
-	graph.events = append(graph.events, Event{
+// Start formally begins the session and emits the session.start event. It must
+// be called before Append, Rewrite, or End. Returns [ErrSessionAlreadyStarted]
+// if called more than once, and [ErrSessionClosed] if the graph is already closed.
+func (graph *Graph) Start() (Event, error) {
+	graph.mu.Lock()
+	defer graph.mu.Unlock()
+
+	if graph.closed {
+		return Event{}, ErrSessionClosed
+	}
+
+	if graph.started {
+		return Event{}, ErrSessionAlreadyStarted
+	}
+
+	graph.started = true
+	graph.session.Timestamp = time.Now().UTC()
+
+	event := Event{
 		Kind:        EventKindSessionStart,
 		Event:       graph.eventNames.Name(EventKindSessionStart),
 		SessionID:   graph.session.ID,
 		Timestamp:   graph.session.Timestamp,
 		SpawnedFrom: copySpawnReference(graph.session.SpawnedFrom),
-	})
+	}
 
-	return graph
+	graph.events = append(graph.events, event)
+
+	return copyEvent(event), nil
 }
 
 // Session returns the graph's session metadata.
@@ -209,8 +236,10 @@ func (graph *Graph) Rewrite(message Message, parentID ID, synthesizedFrom ...ID)
 	return copyNode(node), copyEvent(event), nil
 }
 
-// End emits a session ended event using the current head as the terminal node.
-// reason must be one of [EndReasonComplete] or [EndReasonFailed].
+// End emits a session ended event. reason must be one of [EndReasonComplete] or
+// [EndReasonFailed]. Returns [ErrSessionNotStarted] if Start has not been called,
+// and [ErrSessionClosed] if End has already been called. terminal_node_id in the
+// emitted event is empty when End is called on a started graph with no nodes.
 func (graph *Graph) End(reason EndReason) (Event, error) {
 	graph.mu.Lock()
 	defer graph.mu.Unlock()
@@ -219,8 +248,8 @@ func (graph *Graph) End(reason EndReason) (Event, error) {
 		return Event{}, ErrSessionClosed
 	}
 
-	if graph.headID == "" {
-		return Event{}, errors.New("cannot end a session without nodes")
+	if !graph.started {
+		return Event{}, ErrSessionNotStarted
 	}
 
 	graph.closed = true
@@ -290,6 +319,10 @@ func (graph *Graph) appendNode(
 ) (Node, Event, error) {
 	if graph.closed {
 		return Node{}, Event{}, ErrSessionClosed
+	}
+
+	if !graph.started {
+		return Node{}, Event{}, ErrSessionNotStarted
 	}
 
 	if graph.eventNames.Name(kind) == "" {

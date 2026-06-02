@@ -5,7 +5,18 @@ import (
 	"testing"
 )
 
-func TestNewGraphEmitsConfigurableSessionStart(t *testing.T) {
+func TestNewGraphHasNoEventsBeforeStart(t *testing.T) {
+	t.Parallel()
+
+	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1")))
+
+	events := graph.Events()
+	if len(events) != 0 {
+		t.Fatalf("expected no events before Start, got %d", len(events))
+	}
+}
+
+func TestStartEmitsConfigurableSessionStart(t *testing.T) {
 	t.Parallel()
 
 	graph := NewGraph(
@@ -17,6 +28,10 @@ func TestNewGraphEmitsConfigurableSessionStart(t *testing.T) {
 			SessionEnded:     "sgp.session.ended",
 		}),
 	)
+
+	if _, err := graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
 
 	events := graph.Events()
 	if len(events) != 1 {
@@ -32,10 +47,108 @@ func TestNewGraphEmitsConfigurableSessionStart(t *testing.T) {
 	}
 }
 
+func TestStartIsIdempotentError(t *testing.T) {
+	t.Parallel()
+
+	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1")))
+
+	if _, err := graph.Start(); err != nil {
+		t.Fatalf("first start: %v", err)
+	}
+
+	if _, err := graph.Start(); !errors.Is(err, ErrSessionAlreadyStarted) {
+		t.Fatalf("expected ErrSessionAlreadyStarted on second Start, got %v", err)
+	}
+}
+
+func TestStartOnClosedGraphReturnsErrSessionClosed(t *testing.T) {
+	t.Parallel()
+
+	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
+
+	if _, err := graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	if _, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	if _, err := graph.End(EndReasonComplete); err != nil {
+		t.Fatalf("end: %v", err)
+	}
+
+	if _, err := graph.Start(); !errors.Is(err, ErrSessionClosed) {
+		t.Fatalf("expected ErrSessionClosed on Start after End, got %v", err)
+	}
+}
+
+func TestAppendBeforeStartReturnsErrSessionNotStarted(t *testing.T) {
+	t.Parallel()
+
+	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
+
+	if _, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}}); !errors.Is(err, ErrSessionNotStarted) {
+		t.Fatalf("expected ErrSessionNotStarted, got %v", err)
+	}
+}
+
+func TestRewriteBeforeStartReturnsErrSessionNotStarted(t *testing.T) {
+	t.Parallel()
+
+	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1")))
+
+	if _, _, err := graph.Rewrite(
+		Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "merged"}}}}},
+		"some-parent",
+		"some-source",
+	); !errors.Is(err, ErrSessionNotStarted) {
+		t.Fatalf("expected ErrSessionNotStarted, got %v", err)
+	}
+}
+
+func TestEndBeforeStartReturnsErrSessionNotStarted(t *testing.T) {
+	t.Parallel()
+
+	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1")))
+
+	if _, err := graph.End(EndReasonFailed); !errors.Is(err, ErrSessionNotStarted) {
+		t.Fatalf("expected ErrSessionNotStarted, got %v", err)
+	}
+}
+
+func TestEndWithoutNodesSucceedsAfterStart(t *testing.T) {
+	t.Parallel()
+
+	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1")))
+
+	if _, err := graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	event, err := graph.End(EndReasonFailed)
+	if err != nil {
+		t.Fatalf("end without nodes: %v", err)
+	}
+
+	if got, want := event.Reason, EndReasonFailed; got != want {
+		t.Fatalf("expected reason %q, got %q", want, got)
+	}
+
+	if event.TerminalNodeID != "" {
+		t.Fatalf("expected empty terminal_node_id when no nodes, got %q", event.TerminalNodeID)
+	}
+}
+
 func TestResumeMessagesReturnsCanonicalLineage(t *testing.T) {
 	t.Parallel()
 
 	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a", "node-b", "node-c")))
+
+	if _, err := graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
 	root, _, err := graph.Append(Message{System: &SystemMessage{Text: "system"}})
 	if err != nil {
 		t.Fatalf("append root: %v", err)
@@ -84,6 +197,10 @@ func TestRewriteKeepsBranchHistoryOutOfCanonicalResume(t *testing.T) {
 			"f",
 		)),
 	)
+
+	if _, err := graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
 
 	root, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}})
 	if err != nil {
@@ -146,6 +263,11 @@ func TestNeedsResponseOnlyForDanglingUserOrToolLeaves(t *testing.T) {
 	t.Parallel()
 
 	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a", "node-b", "node-c")))
+
+	if _, err := graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
 	root, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}})
 	if err != nil {
 		t.Fatalf("append root: %v", err)
@@ -184,6 +306,11 @@ func TestEndUsesCurrentHead(t *testing.T) {
 	t.Parallel()
 
 	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
+
+	if _, err := graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
 	root, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}})
 	if err != nil {
 		t.Fatalf("append root: %v", err)
@@ -198,30 +325,8 @@ func TestEndUsesCurrentHead(t *testing.T) {
 		t.Fatalf("expected terminal node %q, got %q", want, got)
 	}
 
-	if got, want := event.Reason, EndReasonComplete; got != want {
-		t.Fatalf("expected end reason %q, got %q", want, got)
-	}
-
 	if _, _, err = graph.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "late"}}}}}, root.ID); !errors.Is(err, ErrSessionClosed) {
 		t.Fatalf("expected ErrSessionClosed, got %v", err)
-	}
-}
-
-func TestEndReasonIsCarriedOnEvent(t *testing.T) {
-	t.Parallel()
-
-	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
-	if _, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}}); err != nil {
-		t.Fatalf("append root: %v", err)
-	}
-
-	event, err := graph.End(EndReasonFailed)
-	if err != nil {
-		t.Fatalf("end graph: %v", err)
-	}
-
-	if got, want := event.Reason, EndReasonFailed; got != want {
-		t.Fatalf("expected end reason %q, got %q", want, got)
 	}
 }
 

@@ -9,6 +9,10 @@ func TestSnapshotUsesCurrentVersion(t *testing.T) {
 	t.Parallel()
 
 	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
+	if _, err := graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
 	if _, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}}); err != nil {
 		t.Fatalf("append root: %v", err)
 	}
@@ -129,6 +133,10 @@ func TestRestoreGraphRoundTripsSnapshot(t *testing.T) {
 		}),
 	)
 
+	if _, err := graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
 	root, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}})
 	if err != nil {
 		t.Fatalf("append root: %v", err)
@@ -239,6 +247,10 @@ func TestSnapshotRoundTripsEndReason(t *testing.T) {
 	t.Parallel()
 
 	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
+	if _, err := graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
 	if _, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}}); err != nil {
 		t.Fatalf("append root: %v", err)
 	}
@@ -255,6 +267,65 @@ func TestSnapshotRoundTripsEndReason(t *testing.T) {
 	restoredSnapshot := restored.Snapshot()
 	if got, want := restoredSnapshot.EndReason, EndReasonFailed; got != want {
 		t.Fatalf("expected end reason %q after round-trip, got %q", want, got)
+	}
+}
+
+func TestSnapshotRoundTripsStartedFlag(t *testing.T) {
+	t.Parallel()
+
+	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
+
+	if _, err := graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	if _, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	restored, err := RestoreGraph(graph.Snapshot())
+	if err != nil {
+		t.Fatalf("restore graph: %v", err)
+	}
+
+	// Restored graph must accept further appends — Started must be true.
+	head, ok := restored.Head()
+	if !ok {
+		t.Fatal("expected restored graph to have a head node")
+	}
+
+	if _, _, err = restored.Append(Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "hi"}}}}}, head.ID); err != nil {
+		t.Fatalf("append on restored graph: %v", err)
+	}
+}
+
+func TestRestoreGraphInfersStartedFromEventLog(t *testing.T) {
+	t.Parallel()
+
+	// Simulate a snapshot written before the Started field existed:
+	// Started is false (zero value) but the session.start event is present.
+	snapshot := GraphSnapshot{
+		Version: CurrentGraphSnapshotVersion,
+		Session: Session{ID: "session-1"},
+		Nodes: []Node{
+			{ID: "node-a", SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}},
+		},
+		Events: []Event{
+			{Event: DefaultEventNames().SessionStart, SessionID: "session-1"},
+			{Event: DefaultEventNames().NodeAppended, SessionID: "session-1", Node: &Node{ID: "node-a", SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}}},
+		},
+		HeadID:  "node-a",
+		Started: false, // explicitly absent / zero
+	}
+
+	restored, err := RestoreGraph(snapshot)
+	if err != nil {
+		t.Fatalf("restore graph: %v", err)
+	}
+
+	// Graph should accept appends because started was inferred from the event log.
+	if _, _, err = restored.Append(Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "hi"}}}}}, ID("node-a")); err != nil {
+		t.Fatalf("expected inferred-started graph to accept appends, got %v", err)
 	}
 }
 

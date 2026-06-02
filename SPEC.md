@@ -154,7 +154,13 @@ ordered by emission time.
 }
 ```
 
-Emitted once at the beginning of each session. `spawned_from` is omitted for root sessions.
+Emitted once when the session is formally started. `spawned_from` is omitted for root sessions.
+
+The session.start event must be the first event emitted for a session. `node.appended`, `history.rewritten`, and `session.ended` are all invalid before `session.start` has been emitted. The ordering invariant is:
+
+```
+session.start → (node.appended | history.rewritten)* → session.ended
+```
 
 ### `node.appended`
 
@@ -201,9 +207,7 @@ branch tips folded into the rewrite.
 }
 ```
 
-Emitted once when the session terminates. `terminal_node_id` is the HEAD at termination.
-`reason` is one of `complete` (the agent finished successfully) or `failed` (the session
-terminated due to an error).
+Emitted once when the session terminates. `reason` is `complete` for successful termination or `failed` for error termination. `terminal_node_id` is the HEAD node at termination; it is omitted when the session ended before any nodes were appended (for example, a session that failed during provisioning before the harness connected).
 
 ## Examples
 

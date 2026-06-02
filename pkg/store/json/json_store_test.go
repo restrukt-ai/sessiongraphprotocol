@@ -60,6 +60,10 @@ func TestJSONFileStoreHonorsCanceledContext(t *testing.T) {
 	cancel()
 
 	graph := sgp.NewGraph(sgp.WithIDGenerator(sequenceIDs("session-1", "node-a")))
+	if _, err = graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
 	if _, _, err = graph.Append(sgp.Message{System: &sgp.SystemMessage{Text: "sys"}}); err != nil {
 		t.Fatalf("append root: %v", err)
 	}
@@ -83,6 +87,10 @@ func TestJSONFileStoreWritesVersionedJSON(t *testing.T) {
 	}
 
 	graph := sgp.NewGraph(sgp.WithIDGenerator(sequenceIDs("session-1", "node-a")))
+	if _, err = graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
 	if _, _, err = graph.Append(sgp.Message{System: &sgp.SystemMessage{Text: "sys"}}); err != nil {
 		t.Fatalf("append root: %v", err)
 	}
@@ -150,6 +158,10 @@ func TestJSONFileStoreRoundTrip(t *testing.T) {
 	}
 
 	graph := sgp.NewGraph(sgp.WithIDGenerator(sequenceIDs("session-1", "node-a", "node-b")))
+	if _, err = graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
 	root, _, err := graph.Append(sgp.Message{System: &sgp.SystemMessage{Text: "sys"}})
 	if err != nil {
 		t.Fatalf("append root: %v", err)
