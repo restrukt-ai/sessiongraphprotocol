@@ -8,7 +8,8 @@ import (
 	"os"
 	"os/exec"
 
-	sgp "github.com/restrukt-ai/sessiongraphprotocol"
+	sgp "github.com/restrukt-ai/sessiongraphprotocol/pkg/sgp"
+	jsonstore "github.com/restrukt-ai/sessiongraphprotocol/pkg/store/json"
 )
 
 const maxToolSteps = 10
@@ -17,7 +18,7 @@ var errTeleported = errors.New("teleported")
 
 type harness struct {
 	graph      *sgp.Graph
-	store      *sgp.JSONFileStore
+	store      *jsonstore.JSONFileStore
 	headID     sgp.ID
 	ollamaURL  string
 	model      string
@@ -28,7 +29,7 @@ type harness struct {
 }
 
 func newHarness(sessionDir, sessionID, ollamaURL, model, systemPrompt, toolsDesc, peersDesc string) (*harness, sgp.ID, error) {
-	store, err := sgp.NewJSONFileStore(sessionDir)
+	store, err := jsonstore.NewJSONFileStore(sessionDir)
 	if err != nil {
 		return nil, "", fmt.Errorf("create store: %w", err)
 	}

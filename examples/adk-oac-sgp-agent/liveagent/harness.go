@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	sgp "github.com/restrukt-ai/sessiongraphprotocol"
+	sgp "github.com/restrukt-ai/sessiongraphprotocol/pkg/sgp"
 )
 
 type Harness struct {

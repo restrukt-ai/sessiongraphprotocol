@@ -6,14 +6,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	sgp "github.com/restrukt-ai/sessiongraphprotocol"
+	sgp "github.com/restrukt-ai/sessiongraphprotocol/pkg/sgp"
+	jsonstore "github.com/restrukt-ai/sessiongraphprotocol/pkg/store/json"
 	"google.golang.org/genai"
 )
 
 func TestHarnessHandleEventPersistsPerOACSession(t *testing.T) {
 	t.Parallel()
 
-	store, err := sgp.NewJSONFileStore(filepath.Join(t.TempDir(), "sessions"))
+	store, err := jsonstore.NewJSONFileStore(filepath.Join(t.TempDir(), "sessions"))
 	if err != nil {
 		t.Fatalf("NewJSONFileStore() error = %v", err)
 	}

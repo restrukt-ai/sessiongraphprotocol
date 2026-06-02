@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	sgp "github.com/restrukt-ai/sessiongraphprotocol"
+	jsonstore "github.com/restrukt-ai/sessiongraphprotocol/pkg/store/json"
 	"google.golang.org/genai"
 )
 
@@ -15,7 +15,7 @@ func TestExecuteFunctionCallsPrunesSingleFailedTool(t *testing.T) {
 
 	ctx := context.Background()
 	workspace := t.TempDir()
-	store, err := sgp.NewJSONFileStore(filepath.Join(t.TempDir(), "sessions"))
+	store, err := jsonstore.NewJSONFileStore(filepath.Join(t.TempDir(), "sessions"))
 	if err != nil {
 		t.Fatalf("NewJSONFileStore() error = %v", err)
 	}

@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	sgp "github.com/restrukt-ai/sessiongraphprotocol"
+	sgp "github.com/restrukt-ai/sessiongraphprotocol/pkg/sgp"
+	jsonstore "github.com/restrukt-ai/sessiongraphprotocol/pkg/store/json"
 	"google.golang.org/adk/session"
 )
 
@@ -34,7 +35,7 @@ type trackedSession struct {
 // Service implements ADK session.Service while persisting canonical history to SGP JSON snapshots.
 type Service struct {
 	mu        sync.RWMutex
-	store     *sgp.JSONFileStore
+	store     *jsonstore.JSONFileStore
 	sessions  map[sessionKey]*trackedSession
 	appState  map[string]map[string]any
 	userState map[string]map[string]map[string]any
@@ -44,7 +45,7 @@ var _ session.Service = (*Service)(nil)
 
 // NewService creates a new SGP-backed ADK session service.
 func NewService(baseDir string) (*Service, error) {
-	store, err := sgp.NewJSONFileStore(baseDir)
+	store, err := jsonstore.NewJSONFileStore(baseDir)
 	if err != nil {
 		return nil, err
 	}

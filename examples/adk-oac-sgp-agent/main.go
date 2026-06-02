@@ -18,7 +18,7 @@ import (
 	"google.golang.org/adk/cmd/launcher/full"
 	"google.golang.org/adk/model/gemini"
 
-	sgp "github.com/restrukt-ai/sessiongraphprotocol"
+	jsonstore "github.com/restrukt-ai/sessiongraphprotocol/pkg/store/json"
 	"github.com/restrukt-ai/sessiongraphprotocol/examples/adk-oac-sgp-agent/liveagent"
 	"github.com/restrukt-ai/sessiongraphprotocol/examples/adk-oac-sgp-agent/oacstream"
 	"github.com/restrukt-ai/sessiongraphprotocol/examples/adk-oac-sgp-agent/sgpsession"
@@ -304,13 +304,13 @@ func newModelRuntime(ctx context.Context, input *bufio.Reader, output *os.File, 
 	}, nil
 }
 
-func newHarnessStore(subdir string) (*sgp.JSONFileStore, error) {
+func newHarnessStore(subdir string) (*jsonstore.JSONFileStore, error) {
 	sessionDir := os.Getenv("SGP_SESSION_DIR")
 	if sessionDir == "" {
 		sessionDir = ".sgp-sessions"
 	}
 
-	return sgp.NewJSONFileStore(filepath.Join(sessionDir, subdir))
+	return jsonstore.NewJSONFileStore(filepath.Join(sessionDir, subdir))
 }
 
 func truncateForLog(value string, limit int) string {

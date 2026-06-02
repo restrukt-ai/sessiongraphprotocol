@@ -3,7 +3,7 @@ package codingagent
 import (
 	"testing"
 
-	sgp "github.com/restrukt-ai/sessiongraphprotocol"
+	sgp "github.com/restrukt-ai/sessiongraphprotocol/pkg/sgp"
 )
 
 func TestSpawnSubagentCarriesProvenance(t *testing.T) {

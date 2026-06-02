@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	sgp "github.com/restrukt-ai/sessiongraphprotocol"
+	sgp "github.com/restrukt-ai/sessiongraphprotocol/pkg/sgp"
+	jsonstore "github.com/restrukt-ai/sessiongraphprotocol/pkg/store/json"
 	"google.golang.org/adk/session"
 )
 
@@ -81,7 +82,7 @@ func TestServiceCreateAppendAndPersistSGP(t *testing.T) {
 		t.Fatalf("temp state key should be trimmed from stored event")
 	}
 
-	store, err := sgp.NewJSONFileStore(dir)
+	store, err := jsonstore.NewJSONFileStore(dir)
 	if err != nil {
 		t.Fatalf("NewJSONFileStore() error = %v", err)
 	}
@@ -209,7 +210,7 @@ func TestServiceIngestOrchestratorEvent(t *testing.T) {
 		t.Fatalf("IngestOrchestratorEvent() error = %v", err)
 	}
 
-	store, err := sgp.NewJSONFileStore(dir)
+	store, err := jsonstore.NewJSONFileStore(dir)
 	if err != nil {
 		t.Fatalf("NewJSONFileStore() error = %v", err)
 	}

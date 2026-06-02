@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	sgp "github.com/restrukt-ai/sessiongraphprotocol"
+	sgp "github.com/restrukt-ai/sessiongraphprotocol/pkg/sgp"
 	"github.com/restrukt-ai/sessiongraphprotocol/examples/adk-oac-sgp-agent/codingagent"
 	"google.golang.org/genai"
 )

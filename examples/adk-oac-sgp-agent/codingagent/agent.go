@@ -3,7 +3,7 @@ package codingagent
 import (
 	"fmt"
 
-	sgp "github.com/restrukt-ai/sessiongraphprotocol"
+	sgp "github.com/restrukt-ai/sessiongraphprotocol/pkg/sgp"
 )
 
 // Agent is a proof-of-concept harness that applies SGP rewrite semantics to
