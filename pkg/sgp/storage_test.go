@@ -5,134 +5,197 @@ import (
 	"testing"
 )
 
-func TestSnapshotUsesCurrentVersion(t *testing.T) {
+// --- ClassifyEvent ---
+
+func TestClassifyEventSessionStart(t *testing.T) {
 	t.Parallel()
 
-	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
+	event := Event{Event: "session.start", SessionID: "s1"}
+	if got, want := ClassifyEvent(event), EventKindSessionStart; got != want {
+		t.Fatalf("expected %d, got %d", want, got)
+	}
+}
+
+func TestClassifyEventNodeAppended(t *testing.T) {
+	t.Parallel()
+
+	event := Event{
+		Event: "node.appended",
+		Node:  &Node{ID: "n1", SessionID: "s1", Message: Message{System: &SystemMessage{Text: "sys"}}},
+	}
+	if got, want := ClassifyEvent(event), EventKindNodeAppended; got != want {
+		t.Fatalf("expected %d, got %d", want, got)
+	}
+}
+
+func TestClassifyEventHistoryRewritten(t *testing.T) {
+	t.Parallel()
+
+	event := Event{
+		Event: "history.rewritten",
+		Node: &Node{
+			ID:              "n2",
+			SessionID:       "s1",
+			SynthesizedFrom: []ID{"n1"},
+			Message:         Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "merged"}}}}},
+		},
+	}
+	if got, want := ClassifyEvent(event), EventKindHistoryRewritten; got != want {
+		t.Fatalf("expected %d, got %d", want, got)
+	}
+}
+
+func TestClassifyEventSessionEndedByReason(t *testing.T) {
+	t.Parallel()
+
+	event := Event{Event: "session.ended", Reason: EndReasonFailed}
+	if got, want := ClassifyEvent(event), EventKindSessionEnded; got != want {
+		t.Fatalf("expected %d, got %d", want, got)
+	}
+}
+
+func TestClassifyEventSessionEndedByTerminalNodeID(t *testing.T) {
+	t.Parallel()
+
+	event := Event{Event: "session.ended", TerminalNodeID: "n1", Reason: EndReasonComplete}
+	if got, want := ClassifyEvent(event), EventKindSessionEnded; got != want {
+		t.Fatalf("expected %d, got %d", want, got)
+	}
+}
+
+// --- RestoreFromEvents ---
+
+func TestRestoreFromEventsEmptyReturnsNotFound(t *testing.T) {
+	t.Parallel()
+
+	_, err := RestoreFromEvents(nil)
+	if !errors.Is(err, ErrGraphNotFound) {
+		t.Fatalf("expected ErrGraphNotFound, got %v", err)
+	}
+
+	_, err = RestoreFromEvents([]Event{})
+	if !errors.Is(err, ErrGraphNotFound) {
+		t.Fatalf("expected ErrGraphNotFound for empty slice, got %v", err)
+	}
+}
+
+func TestRestoreFromEventsMissingSessionStart(t *testing.T) {
+	t.Parallel()
+
+	// Events without a session.start event.
+	events := []Event{
+		{
+			Event: DefaultEventNames().NodeAppended,
+			Node:  &Node{ID: "n1", SessionID: "s1", Message: Message{System: &SystemMessage{Text: "sys"}}},
+		},
+	}
+
+	_, err := RestoreFromEvents(events)
+	if err == nil {
+		t.Fatal("expected error for missing session.start, got nil")
+	}
+}
+
+func TestRestoreFromEventsStartedOnlyGraphAcceptsAppends(t *testing.T) {
+	t.Parallel()
+
+	// A session that started but has no nodes yet (e.g. provisioning in progress).
+	graph := NewGraph(WithIDGenerator(sequenceIDs("s1", "n1")))
+	startEvent, err := graph.Start()
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	restored, err := RestoreFromEvents([]Event{startEvent})
+	if err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+
+	if _, _, err = restored.Append(Message{System: &SystemMessage{Text: "sys"}}); err != nil {
+		t.Fatalf("expected restored open graph to accept appends, got %v", err)
+	}
+}
+
+func TestRestoreFromEventsFailedSessionNoNodes(t *testing.T) {
+	t.Parallel()
+
+	// Session started then immediately failed (provisioning failure, no nodes).
+	graph := NewGraph(WithIDGenerator(sequenceIDs("s1")))
+	startEvent, err := graph.Start()
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	endEvent, err := graph.End(EndReasonFailed)
+	if err != nil {
+		t.Fatalf("end: %v", err)
+	}
+
+	restored, err := RestoreFromEvents([]Event{startEvent, endEvent})
+	if err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+
+	if _, _, err = restored.Append(Message{System: &SystemMessage{Text: "sys"}}); !errors.Is(err, ErrSessionClosed) {
+		t.Fatalf("expected ErrSessionClosed on failed session, got %v", err)
+	}
+}
+
+func TestRestoreFromEventsLinearSession(t *testing.T) {
+	t.Parallel()
+
+	graph := NewGraph(WithIDGenerator(sequenceIDs("s1", "n-sys", "n-user", "n-asst")))
 	if _, err := graph.Start(); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 
-	if _, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}}); err != nil {
+	root, _, err := graph.Append(Message{System: &SystemMessage{Text: "system prompt"}})
+	if err != nil {
 		t.Fatalf("append root: %v", err)
 	}
-
-	snapshot := graph.Snapshot()
-	if got, want := snapshot.Version, uint32(CurrentGraphSnapshotVersion); got != want {
-		t.Fatalf("expected snapshot version %d, got %d", want, got)
-	}
-}
-
-func TestUpgradeSnapshotAcceptsCurrentVersion(t *testing.T) {
-	t.Parallel()
-
-	snapshot := GraphSnapshot{
-		Version: CurrentGraphSnapshotVersion,
-		Session: Session{ID: "session-1"},
-		Nodes: []Node{{
-			ID:        "node-a",
-			SessionID: "session-1",
-			Message:   Message{System: &SystemMessage{Text: "sys"}},
-		}},
-		Events: []Event{{
-			Event:     DefaultEventNames().SessionStart,
-			SessionID: "session-1",
-		}},
-		HeadID: "node-a",
-	}
-
-	upgradedSnapshot, err := UpgradeSnapshot(snapshot)
+	userNode, _, err := graph.Append(Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "hello"}}}}}, root.ID)
 	if err != nil {
-		t.Fatalf("upgrade snapshot: %v", err)
+		t.Fatalf("append user: %v", err)
 	}
-
-	if got, want := upgradedSnapshot.Version, uint32(CurrentGraphSnapshotVersion); got != want {
-		t.Fatalf("expected upgraded version %d, got %d", want, got)
-	}
-
-	if got, want := upgradedSnapshot.Version, snapshot.Version; got != want {
-		t.Fatalf("expected upgraded version %d, got %d", want, got)
-	}
-}
-
-func TestUpgradeSnapshotRejectsMissingVersion(t *testing.T) {
-	t.Parallel()
-
-	_, err := UpgradeSnapshot(GraphSnapshot{Session: Session{ID: "session-1"}})
-	if !errors.Is(err, ErrInvalidSnapshot) {
-		t.Fatalf("expected ErrInvalidSnapshot, got %v", err)
-	}
-}
-
-func TestUpgradeSnapshotRejectsFutureVersion(t *testing.T) {
-	t.Parallel()
-
-	_, err := UpgradeSnapshot(GraphSnapshot{Version: CurrentGraphSnapshotVersion + 1, Session: Session{ID: "session-1"}})
-	if !errors.Is(err, ErrInvalidSnapshot) {
-		t.Fatalf("expected ErrInvalidSnapshot, got %v", err)
-	}
-}
-
-func TestRestoreGraphWithCurrentVersionSnapshot(t *testing.T) {
-	t.Parallel()
-
-	snapshot := GraphSnapshot{
-		Version: CurrentGraphSnapshotVersion,
-		Session: Session{ID: "session-1"},
-		Nodes: []Node{
-			{ID: "node-a", SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}},
-			{ID: "node-b", SessionID: "session-1", ParentIDs: []ID{"node-a"}, Message: Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "ask"}}}}}},
-		},
-		Events: []Event{
-			{Event: DefaultEventNames().SessionStart, SessionID: "session-1"},
-			{Event: DefaultEventNames().NodeAppended, SessionID: "session-1", Node: &Node{ID: "node-a", SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}}},
-			{Event: DefaultEventNames().NodeAppended, SessionID: "session-1", Node: &Node{ID: "node-b", SessionID: "session-1", ParentIDs: []ID{"node-a"}, Message: Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "ask"}}}}}}},
-		},
-		HeadID: "node-b",
-	}
-
-	graph, err := RestoreGraph(snapshot)
+	_, _, err = graph.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "hi"}}}}}, userNode.ID)
 	if err != nil {
-		t.Fatalf("restore graph: %v", err)
+		t.Fatalf("append assistant: %v", err)
 	}
 
-	messages, err := graph.ResumeMessages("node-b")
+	events := graph.Events()
+
+	restored, err := RestoreFromEvents(events)
+	if err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+
+	head, ok := restored.Head()
+	if !ok {
+		t.Fatal("expected restored graph to have a head node")
+	}
+
+	messages, err := restored.ResumeMessages(head.ID)
 	if err != nil {
 		t.Fatalf("resume messages: %v", err)
 	}
 
-	if got, want := len(messages), 2; got != want {
+	if got, want := len(messages), 3; got != want {
 		t.Fatalf("expected %d messages, got %d", want, got)
 	}
 
-	events := graph.Events()
-	if got, want := events[0].Kind, EventKindSessionStart; got != want {
-		t.Fatalf("expected restored start kind %d, got %d", want, got)
+	if got, want := messages[0].TextContent(), "system prompt"; got != want {
+		t.Fatalf("expected first message %q, got %q", want, got)
+	}
+
+	if got, want := messages[2].TextContent(), "hi"; got != want {
+		t.Fatalf("expected last message %q, got %q", want, got)
 	}
 }
 
-func TestRestoreGraphRejectsMissingVersion(t *testing.T) {
+func TestRestoreFromEventsDanglingLeafDetected(t *testing.T) {
 	t.Parallel()
 
-	_, err := RestoreGraph(GraphSnapshot{Session: Session{ID: "session-1"}})
-	if !errors.Is(err, ErrInvalidSnapshot) {
-		t.Fatalf("expected ErrInvalidSnapshot, got %v", err)
-	}
-}
-
-func TestRestoreGraphRoundTripsSnapshot(t *testing.T) {
-	t.Parallel()
-
-	graph := NewGraph(
-		WithIDGenerator(sequenceIDs("session-1", "node-a", "node-b")),
-		WithEventNames(EventNames{
-			SessionStart:     "sgp.session.started",
-			NodeAppended:     "sgp.node.appended",
-			HistoryRewritten: "sgp.history.rewritten",
-			SessionEnded:     "sgp.session.ended",
-		}),
-	)
-
+	graph := NewGraph(WithIDGenerator(sequenceIDs("s1", "n-sys", "n-user")))
 	if _, err := graph.Start(); err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -141,140 +204,57 @@ func TestRestoreGraphRoundTripsSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("append root: %v", err)
 	}
-
-	assistantNode, _, err := graph.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "answer"}}}}}, root.ID)
+	userNode, _, err := graph.Append(Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "ask"}}}}}, root.ID)
 	if err != nil {
-		t.Fatalf("append assistant: %v", err)
+		t.Fatalf("append user: %v", err)
 	}
 
-	if _, err = graph.End(EndReasonComplete); err != nil {
-		t.Fatalf("end graph: %v", err)
-	}
-
-	restored, err := RestoreGraph(graph.Snapshot())
+	restored, err := RestoreFromEvents(graph.Events())
 	if err != nil {
-		t.Fatalf("restore graph: %v", err)
+		t.Fatalf("restore: %v", err)
 	}
 
-	messages, err := restored.ResumeMessages(assistantNode.ID)
+	needsResponse, err := restored.NeedsResponse(userNode.ID)
 	if err != nil {
-		t.Fatalf("resume messages: %v", err)
+		t.Fatalf("needs response: %v", err)
 	}
 
-	if len(messages) != 2 {
-		t.Fatalf("expected 2 messages, got %d", len(messages))
-	}
-
-	events := restored.Events()
-	if got, want := events[0].Kind, EventKindSessionStart; got != want {
-		t.Fatalf("expected restored start kind %d, got %d", want, got)
-	}
-
-	if got, want := events[0].Event, "sgp.session.started"; got != want {
-		t.Fatalf("expected restored custom event name %q, got %q", want, got)
-	}
-
-	if _, _, err = restored.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "late"}}}}}, assistantNode.ID); !errors.Is(err, ErrSessionClosed) {
-		t.Fatalf("expected restored closed graph to reject appends, got %v", err)
+	if !needsResponse {
+		t.Fatal("expected dangling user leaf to require a response after restore")
 	}
 }
 
-func TestUpgradeV1ToV2BackfillsEndReasonOnClosedSnapshot(t *testing.T) {
+func TestRestoreFromEventsClosedGraphRejectsAppends(t *testing.T) {
 	t.Parallel()
 
-	v1Snapshot := GraphSnapshot{
-		Version: GraphSnapshotVersion1,
-		Session: Session{ID: "session-1"},
-		Nodes: []Node{{
-			ID:        "node-a",
-			SessionID: "session-1",
-			Message:   Message{System: &SystemMessage{Text: "sys"}},
-		}},
-		Events: []Event{
-			{Event: DefaultEventNames().SessionStart, SessionID: "session-1"},
-			{Event: DefaultEventNames().NodeAppended, SessionID: "session-1"},
-			{Event: DefaultEventNames().SessionEnded, SessionID: "session-1", TerminalNodeID: "node-a"},
-		},
-		HeadID:         "node-a",
-		TerminalNodeID: "node-a",
-		Closed:         true,
-	}
-
-	upgraded, err := UpgradeSnapshot(v1Snapshot)
-	if err != nil {
-		t.Fatalf("upgrade snapshot: %v", err)
-	}
-
-	if got, want := upgraded.Version, GraphSnapshotVersion2; got != want {
-		t.Fatalf("expected version %d, got %d", want, got)
-	}
-
-	if got, want := upgraded.EndReason, EndReasonComplete; got != want {
-		t.Fatalf("expected end reason %q, got %q", want, got)
-	}
-}
-
-func TestUpgradeV1ToV2LeavesEndReasonEmptyOnOpenSnapshot(t *testing.T) {
-	t.Parallel()
-
-	v1Snapshot := GraphSnapshot{
-		Version: GraphSnapshotVersion1,
-		Session: Session{ID: "session-1"},
-		Nodes: []Node{{
-			ID:        "node-a",
-			SessionID: "session-1",
-			Message:   Message{System: &SystemMessage{Text: "sys"}},
-		}},
-		Events: []Event{
-			{Event: DefaultEventNames().SessionStart, SessionID: "session-1"},
-			{Event: DefaultEventNames().NodeAppended, SessionID: "session-1"},
-		},
-		HeadID: "node-a",
-		Closed: false,
-	}
-
-	upgraded, err := UpgradeSnapshot(v1Snapshot)
-	if err != nil {
-		t.Fatalf("upgrade snapshot: %v", err)
-	}
-
-	if got := upgraded.EndReason; got != "" {
-		t.Fatalf("expected empty end reason on open snapshot, got %q", got)
-	}
-}
-
-func TestSnapshotRoundTripsEndReason(t *testing.T) {
-	t.Parallel()
-
-	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
+	graph := NewGraph(WithIDGenerator(sequenceIDs("s1", "n1")))
 	if _, err := graph.Start(); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 
-	if _, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}}); err != nil {
-		t.Fatalf("append root: %v", err)
-	}
-
-	if _, err := graph.End(EndReasonFailed); err != nil {
-		t.Fatalf("end graph: %v", err)
-	}
-
-	restored, err := RestoreGraph(graph.Snapshot())
+	root, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}})
 	if err != nil {
-		t.Fatalf("restore graph: %v", err)
+		t.Fatalf("append: %v", err)
 	}
 
-	restoredSnapshot := restored.Snapshot()
-	if got, want := restoredSnapshot.EndReason, EndReasonFailed; got != want {
-		t.Fatalf("expected end reason %q after round-trip, got %q", want, got)
+	if _, err = graph.End(EndReasonComplete); err != nil {
+		t.Fatalf("end: %v", err)
+	}
+
+	restored, err := RestoreFromEvents(graph.Events())
+	if err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+
+	if _, _, err = restored.Append(Message{User: &UserMessage{}}, root.ID); !errors.Is(err, ErrSessionClosed) {
+		t.Fatalf("expected ErrSessionClosed, got %v", err)
 	}
 }
 
-func TestSnapshotRoundTripsStartedFlag(t *testing.T) {
+func TestRestoreFromEventsEndReasonPreserved(t *testing.T) {
 	t.Parallel()
 
-	graph := NewGraph(WithIDGenerator(sequenceIDs("session-1", "node-a")))
-
+	graph := NewGraph(WithIDGenerator(sequenceIDs("s1", "n1")))
 	if _, err := graph.Start(); err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -283,127 +263,204 @@ func TestSnapshotRoundTripsStartedFlag(t *testing.T) {
 		t.Fatalf("append: %v", err)
 	}
 
-	restored, err := RestoreGraph(graph.Snapshot())
+	if _, err := graph.End(EndReasonFailed); err != nil {
+		t.Fatalf("end: %v", err)
+	}
+
+	restored, err := RestoreFromEvents(graph.Events())
 	if err != nil {
-		t.Fatalf("restore graph: %v", err)
+		t.Fatalf("restore: %v", err)
 	}
 
-	// Restored graph must accept further appends — Started must be true.
-	head, ok := restored.Head()
-	if !ok {
-		t.Fatal("expected restored graph to have a head node")
+	// Confirm the closed graph carries the right reason by attempting a second End.
+	if _, err = restored.End(EndReasonComplete); !errors.Is(err, ErrSessionClosed) {
+		t.Fatalf("expected closed graph, got %v", err)
 	}
 
-	if _, _, err = restored.Append(Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "hi"}}}}}, head.ID); err != nil {
+	// The session.ended event in the restored graph must carry the reason.
+	var foundReason EndReason
+	for _, e := range restored.Events() {
+		if e.Kind == EventKindSessionEnded {
+			foundReason = e.Reason
+		}
+	}
+
+	if got, want := foundReason, EndReasonFailed; got != want {
+		t.Fatalf("expected end reason %q, got %q", want, got)
+	}
+}
+
+func TestRestoreFromEventsHistoryRewrite(t *testing.T) {
+	t.Parallel()
+
+	graph := NewGraph(WithIDGenerator(sequenceIDs("s1", "n-sys", "n-user", "n-b1", "n-b2", "n-merge")))
+	if _, err := graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	root, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}})
+	if err != nil {
+		t.Fatalf("append root: %v", err)
+	}
+	canonical, _, err := graph.Append(Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "ask"}}}}}, root.ID)
+	if err != nil {
+		t.Fatalf("append canonical: %v", err)
+	}
+	b1, _, err := graph.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "branch-1"}}}}}, canonical.ID)
+	if err != nil {
+		t.Fatalf("append b1: %v", err)
+	}
+	b2, _, err := graph.Append(Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "branch-2"}}}}}, canonical.ID)
+	if err != nil {
+		t.Fatalf("append b2: %v", err)
+	}
+	mergeNode, _, err := graph.Rewrite(
+		Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "merged"}}}}},
+		canonical.ID,
+		b1.ID, b2.ID,
+	)
+	if err != nil {
+		t.Fatalf("rewrite: %v", err)
+	}
+
+	restored, err := RestoreFromEvents(graph.Events())
+	if err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+
+	lineage, err := restored.ResumeNodes(mergeNode.ID)
+	if err != nil {
+		t.Fatalf("resume nodes: %v", err)
+	}
+
+	// Canonical lineage: root → canonical → mergeNode (branches excluded).
+	if got, want := len(lineage), 3; got != want {
+		t.Fatalf("expected canonical lineage length %d, got %d", want, got)
+	}
+
+	if got, want := lineage[2].Message.TextContent(), "merged"; got != want {
+		t.Fatalf("expected merge node content %q, got %q", want, got)
+	}
+
+	if got, want := len(lineage[2].SynthesizedFrom), 2; got != want {
+		t.Fatalf("expected 2 synthesized sources, got %d", got)
+	}
+}
+
+func TestRestoreFromEventsSubagentSpawnedFrom(t *testing.T) {
+	t.Parallel()
+
+	spawnRef := SpawnReference{SessionID: "parent-session", NodeID: "parent-node"}
+	graph := NewGraph(
+		WithIDGenerator(sequenceIDs("child-session", "n1")),
+		WithSpawnedFrom(spawnRef),
+	)
+	if _, err := graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	if _, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	restored, err := RestoreFromEvents(graph.Events())
+	if err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+
+	session := restored.Session()
+	if session.SpawnedFrom == nil {
+		t.Fatal("expected spawned_from to be restored")
+	}
+
+	if got, want := session.SpawnedFrom.SessionID, ID("parent-session"); got != want {
+		t.Fatalf("expected parent session id %q, got %q", want, got)
+	}
+
+	if got, want := session.SpawnedFrom.NodeID, ID("parent-node"); got != want {
+		t.Fatalf("expected parent node id %q, got %q", want, got)
+	}
+}
+
+func TestRestoreFromEventsCustomEventNames(t *testing.T) {
+	t.Parallel()
+
+	customNames := EventNames{
+		SessionStart:     "sgp.session.started",
+		NodeAppended:     "sgp.node.appended",
+		HistoryRewritten: "sgp.history.rewritten",
+		SessionEnded:     "sgp.session.ended",
+	}
+
+	graph := NewGraph(
+		WithIDGenerator(sequenceIDs("s1", "n1")),
+		WithEventNames(customNames),
+	)
+	if _, err := graph.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	if _, _, err := graph.Append(Message{System: &SystemMessage{Text: "sys"}}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	restored, err := RestoreFromEvents(graph.Events())
+	if err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+
+	// Further appends should use the inferred custom event names.
+	head, _ := restored.Head()
+	_, appendEvent, err := restored.Append(
+		Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "hi"}}}}},
+		head.ID,
+	)
+	if err != nil {
 		t.Fatalf("append on restored graph: %v", err)
 	}
-}
 
-func TestRestoreGraphInfersStartedFromEventLog(t *testing.T) {
-	t.Parallel()
-
-	// Simulate a snapshot written before the Started field existed:
-	// Started is false (zero value) but the session.start event is present.
-	snapshot := GraphSnapshot{
-		Version: CurrentGraphSnapshotVersion,
-		Session: Session{ID: "session-1"},
-		Nodes: []Node{
-			{ID: "node-a", SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}},
-		},
-		Events: []Event{
-			{Event: DefaultEventNames().SessionStart, SessionID: "session-1"},
-			{Event: DefaultEventNames().NodeAppended, SessionID: "session-1", Node: &Node{ID: "node-a", SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}}},
-		},
-		HeadID:  "node-a",
-		Started: false, // explicitly absent / zero
-	}
-
-	restored, err := RestoreGraph(snapshot)
-	if err != nil {
-		t.Fatalf("restore graph: %v", err)
-	}
-
-	// Graph should accept appends because started was inferred from the event log.
-	if _, _, err = restored.Append(Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "hi"}}}}}, ID("node-a")); err != nil {
-		t.Fatalf("expected inferred-started graph to accept appends, got %v", err)
+	if got, want := appendEvent.Event, customNames.NodeAppended; got != want {
+		t.Fatalf("expected custom event name %q, got %q", want, got)
 	}
 }
 
-func TestRestoreGraphRejectsInvalidSnapshots(t *testing.T) {
+func TestRestoreFromEventsDuplicateSessionStartReturnsError(t *testing.T) {
 	t.Parallel()
 
-	testCases := []struct {
-		name     string
-		snapshot GraphSnapshot
-	}{
-		{
-			name:     "missing session id",
-			snapshot: GraphSnapshot{Version: CurrentGraphSnapshotVersion},
-		},
-		{
-			name: "missing node id",
-			snapshot: GraphSnapshot{
-				Version: CurrentGraphSnapshotVersion,
-				Session: Session{ID: "session-1"},
-				Nodes:   []Node{{SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}}},
-			},
-		},
-		{
-			name: "session mismatch",
-			snapshot: GraphSnapshot{
-				Version: CurrentGraphSnapshotVersion,
-				Session: Session{ID: "session-1"},
-				Nodes:   []Node{{ID: "node-a", SessionID: "session-2", Message: Message{System: &SystemMessage{Text: "sys"}}}},
-			},
-		},
-		{
-			name: "missing parent",
-			snapshot: GraphSnapshot{
-				Version: CurrentGraphSnapshotVersion,
-				Session: Session{ID: "session-1"},
-				Nodes:   []Node{{ID: "node-a", SessionID: "session-1", ParentIDs: []ID{"missing"}, Message: Message{User: &UserMessage{Parts: []ContentPart{{Text: &TextPart{Text: "sys"}}}}}}},
-			},
-		},
-		{
-			name: "missing synthesized source",
-			snapshot: GraphSnapshot{
-				Version: CurrentGraphSnapshotVersion,
-				Session: Session{ID: "session-1"},
-				Nodes: []Node{
-					{ID: "node-a", SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}},
-					{ID: "node-b", SessionID: "session-1", ParentIDs: []ID{"node-a"}, SynthesizedFrom: []ID{"missing"}, Message: Message{Assistant: &AssistantMessage{Parts: []ContentPart{{Text: &TextPart{Text: "merged"}}}}}},
-				},
-			},
-		},
-		{
-			name: "missing head",
-			snapshot: GraphSnapshot{
-				Version: CurrentGraphSnapshotVersion,
-				Session: Session{ID: "session-1"},
-				Nodes:   []Node{{ID: "node-a", SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}}},
-				HeadID:  "missing",
-			},
-		},
-		{
-			name: "missing terminal",
-			snapshot: GraphSnapshot{
-				Version:        CurrentGraphSnapshotVersion,
-				Session:        Session{ID: "session-1"},
-				Nodes:          []Node{{ID: "node-a", SessionID: "session-1", Message: Message{System: &SystemMessage{Text: "sys"}}}},
-				TerminalNodeID: "missing",
-			},
+	startEvent := Event{
+		Kind:      EventKindSessionStart,
+		Event:     DefaultEventNames().SessionStart,
+		SessionID: "s1",
+	}
+
+	_, err := RestoreFromEvents([]Event{startEvent, startEvent})
+	if err == nil {
+		t.Fatal("expected error for duplicate session.start, got nil")
+	}
+}
+
+func TestRestoreFromEventsMissingParentReturnsError(t *testing.T) {
+	t.Parallel()
+
+	startEvent := Event{
+		Kind:      EventKindSessionStart,
+		Event:     DefaultEventNames().SessionStart,
+		SessionID: "s1",
+	}
+
+	nodeEvent := Event{
+		Kind:  EventKindNodeAppended,
+		Event: DefaultEventNames().NodeAppended,
+		Node: &Node{
+			ID:        "n1",
+			SessionID: "s1",
+			ParentIDs: []ID{"missing-parent"},
+			Message:   Message{User: &UserMessage{}},
 		},
 	}
 
-	for _, testCase := range testCases {
-		testCase := testCase
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			_, err := RestoreGraph(testCase.snapshot)
-			if !errors.Is(err, ErrInvalidSnapshot) {
-				t.Fatalf("expected ErrInvalidSnapshot, got %v", err)
-			}
-		})
+	_, err := RestoreFromEvents([]Event{startEvent, nodeEvent})
+	if !errors.Is(err, ErrNodeNotFound) {
+		t.Fatalf("expected ErrNodeNotFound, got %v", err)
 	}
 }

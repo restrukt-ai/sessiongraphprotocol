@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 
 	"github.com/google/uuid"
 )
@@ -12,258 +11,126 @@ import (
 var (
 	// ErrGraphNotFound indicates that a persisted graph could not be located.
 	ErrGraphNotFound = errors.New("graph not found")
-	// ErrNilGraph indicates that a nil graph was provided to a persistence API.
-	ErrNilGraph = errors.New("graph is nil")
-	// ErrInvalidSnapshot indicates that a graph snapshot cannot be restored.
-	ErrInvalidSnapshot = errors.New("invalid graph snapshot")
 )
 
-const (
-	// GraphSnapshotVersion1 is the first explicit snapshot schema version.
-	GraphSnapshotVersion1 uint32 = 1
-	// GraphSnapshotVersion2 adds EndReason to the snapshot and session.ended event.
-	GraphSnapshotVersion2 uint32 = 2
-	// CurrentGraphSnapshotVersion is the version emitted by this package.
-	CurrentGraphSnapshotVersion = GraphSnapshotVersion2
-)
-
-type snapshotUpgrader func(GraphSnapshot) (GraphSnapshot, error)
-
-var snapshotUpgraders = map[uint32]snapshotUpgrader{
-	1: upgradeV1ToV2,
-}
-
-// upgradeV1ToV2 adds the EndReason field introduced in v2.
-// V1 graphs that are closed were always closed via normal completion —
-// failed sessions in v1 were left open — so closed snapshots are backfilled
-// with EndReasonComplete.
-func upgradeV1ToV2(snap GraphSnapshot) (GraphSnapshot, error) {
-	snap.Version = GraphSnapshotVersion2
-	if snap.Closed && snap.EndReason == "" {
-		snap.EndReason = EndReasonComplete
-	}
-	return snap, nil
-}
-
-// Store persists and loads SGP graphs.
+// Store persists SGP session events as an append-only log.
+//
+// AppendEvent appends a single event to the named session's log. Implementations
+// must return [ErrGraphNotFound] from LoadEvents when no events have been recorded
+// for the given session ID.
+//
+// The Store interface makes no concurrency guarantees for writes to the same
+// session. Callers are responsible for serialising concurrent AppendEvent calls
+// targeting the same sessionID.
+//
+// Implementations must restore the [Event.Kind] field on events returned by
+// LoadEvents using [ClassifyEvent].
 type Store interface {
-	Save(ctx context.Context, graph *Graph) error
-	Load(ctx context.Context, sessionID ID) (*Graph, error)
+	AppendEvent(ctx context.Context, sessionID ID, event Event) error
+	LoadEvents(ctx context.Context, sessionID ID) ([]Event, error)
 }
 
-// GraphSnapshot is the serializable representation of a graph.
-type GraphSnapshot struct {
-	Version        uint32     `json:"version"`
-	Session        Session    `json:"session"`
-	EventNames     EventNames `json:"event_names"`
-	Nodes          []Node     `json:"nodes"`
-	Events         []Event    `json:"events"`
-	HeadID         ID         `json:"head_id,omitempty"`
-	TerminalNodeID ID         `json:"terminal_node_id,omitempty"`
-	Started        bool       `json:"started"`
-	Closed         bool       `json:"closed"`
-	EndReason      EndReason  `json:"end_reason,omitempty"`
-}
-
-// Snapshot returns a serializable copy of the graph.
-func (graph *Graph) Snapshot() GraphSnapshot {
-	graph.mu.RLock()
-	defer graph.mu.RUnlock()
-
-	return GraphSnapshot{
-		Version:        CurrentGraphSnapshotVersion,
-		Session:        Session{ID: graph.session.ID, Timestamp: graph.session.Timestamp, SpawnedFrom: copySpawnReference(graph.session.SpawnedFrom)},
-		EventNames:     graph.eventNames,
-		Nodes:          graph.snapshotNodes(),
-		Events:         copyEvents(graph.events),
-		HeadID:         graph.headID,
-		TerminalNodeID: graph.terminalNodeID,
-		Started:        graph.started,
-		Closed:         graph.closed,
-		EndReason:      graph.endReason,
-	}
-}
-
-// RestoreGraph reconstructs an in-memory graph from a snapshot.
-func RestoreGraph(snapshot GraphSnapshot) (*Graph, error) {
-	upgradedSnapshot, err := UpgradeSnapshot(snapshot)
-	if err != nil {
-		return nil, err
-	}
-
-	snapshot = upgradedSnapshot
-
-	if snapshot.Session.ID == "" {
-		return nil, fmt.Errorf("%w: session id is required", ErrInvalidSnapshot)
-	}
-
-	eventNames := snapshot.EventNames
-	if eventNames == (EventNames{}) {
-		eventNames = DefaultEventNames()
-	}
-
-	// Infer started from the event log when the snapshot field is absent (false).
-	// Snapshots written before the Started field was added always contain a
-	// session.start event because NewGraph used to auto-emit it, so the
-	// inference provides backward compatibility without a version bump.
-	started := snapshot.Started
-	if !started {
-		for _, event := range snapshot.Events {
-			if event.Event == eventNames.SessionStart {
-				started = true
-				break
-			}
+// ClassifyEvent determines the EventKind for an event using field presence.
+// It is robust to custom EventNames because it never compares event name strings.
+// Store implementations should call ClassifyEvent to restore Event.Kind on events
+// loaded from persistent storage (Kind is not serialised).
+func ClassifyEvent(event Event) EventKind {
+	if event.Node != nil {
+		if len(event.Node.SynthesizedFrom) > 0 {
+			return EventKindHistoryRewritten
 		}
+		return EventKindNodeAppended
 	}
+	if event.Reason != "" || event.TerminalNodeID != "" {
+		return EventKindSessionEnded
+	}
+	return EventKindSessionStart
+}
+
+// RestoreFromEvents reconstructs an in-memory [Graph] from a persisted event log.
+// events must be ordered by emission time, as returned by [Store.LoadEvents].
+//
+// EventNames are inferred from the event name strings observed in the log; any
+// kind not represented falls back to [DefaultEventNames]. The restored graph uses
+// the inferred names for all future [Graph.Append], [Graph.Rewrite], and
+// [Graph.End] calls, preserving custom event name configuration across restarts.
+//
+// Returns [ErrGraphNotFound] if events is empty.
+func RestoreFromEvents(events []Event) (*Graph, error) {
+	if len(events) == 0 {
+		return nil, ErrGraphNotFound
+	}
+
+	eventNames := DefaultEventNames()
 
 	graph := &Graph{
-		session: Session{
-			ID:          snapshot.Session.ID,
-			Timestamp:   snapshot.Session.Timestamp,
-			SpawnedFrom: copySpawnReference(snapshot.Session.SpawnedFrom),
-		},
-		eventNames: eventNames,
+		nodes:    make(map[ID]Node),
+		children: make(map[ID][]ID),
 		idGenerator: func() ID {
 			return ID(uuid.NewString())
 		},
-		nodes:          make(map[ID]Node, len(snapshot.Nodes)),
-		children:       make(map[ID][]ID),
-		events:         copyEvents(snapshot.Events),
-		headID:         snapshot.HeadID,
-		terminalNodeID: snapshot.TerminalNodeID,
-		started:        started,
-		endReason:      snapshot.EndReason,
-		closed:         snapshot.Closed,
 	}
 
-	for index := range graph.events {
-		graph.events[index].Kind = eventKindFromName(eventNames, graph.events[index].Event)
-	}
+	for i, event := range events {
+		kind := ClassifyEvent(event)
+		event.Kind = kind
 
-	for _, node := range snapshot.Nodes {
-		if node.ID == "" {
-			return nil, fmt.Errorf("%w: node id is required", ErrInvalidSnapshot)
-		}
+		switch kind {
+		case EventKindSessionStart:
+			if graph.started {
+				return nil, fmt.Errorf("event at index %d: unexpected second session.start event", i)
+			}
+			graph.session.ID = event.SessionID
+			graph.session.Timestamp = event.Timestamp
+			graph.session.SpawnedFrom = copySpawnReference(event.SpawnedFrom)
+			graph.started = true
+			eventNames.SessionStart = event.Event
 
-		if node.SessionID != graph.session.ID {
-			return nil, fmt.Errorf("%w: node %s has session id %s", ErrInvalidSnapshot, node.ID, node.SessionID)
-		}
-
-		graph.nodes[node.ID] = copyNode(node)
-	}
-
-	for _, node := range snapshot.Nodes {
-		for _, parentID := range node.ParentIDs {
-			if _, exists := graph.nodes[parentID]; !exists {
-				return nil, fmt.Errorf("%w: parent %s missing for node %s", ErrInvalidSnapshot, parentID, node.ID)
+		case EventKindNodeAppended, EventKindHistoryRewritten:
+			if event.Node == nil {
+				return nil, fmt.Errorf("event at index %d: missing node", i)
+			}
+			node := copyNode(*event.Node)
+			if node.ID == "" {
+				return nil, fmt.Errorf("event at index %d: node id is required", i)
+			}
+			if node.SessionID == "" || node.SessionID != graph.session.ID {
+				return nil, fmt.Errorf("event at index %d: node %s has session id %q, expected %q", i, node.ID, node.SessionID, graph.session.ID)
+			}
+			for _, parentID := range node.ParentIDs {
+				if _, exists := graph.nodes[parentID]; !exists {
+					return nil, fmt.Errorf("event at index %d: %w: parent %s missing for node %s", i, ErrNodeNotFound, parentID, node.ID)
+				}
+				graph.children[parentID] = append(graph.children[parentID], node.ID)
+			}
+			for _, sourceID := range node.SynthesizedFrom {
+				if _, exists := graph.nodes[sourceID]; !exists {
+					return nil, fmt.Errorf("event at index %d: %w: synthesized source %s missing for node %s", i, ErrNodeNotFound, sourceID, node.ID)
+				}
+			}
+			graph.nodes[node.ID] = node
+			graph.headID = node.ID
+			if kind == EventKindNodeAppended {
+				eventNames.NodeAppended = event.Event
+			} else {
+				eventNames.HistoryRewritten = event.Event
 			}
 
-			graph.children[parentID] = append(graph.children[parentID], node.ID)
+		case EventKindSessionEnded:
+			graph.closed = true
+			graph.terminalNodeID = event.TerminalNodeID
+			graph.endReason = event.Reason
+			eventNames.SessionEnded = event.Event
 		}
 
-		for _, sourceID := range node.SynthesizedFrom {
-			if _, exists := graph.nodes[sourceID]; !exists {
-				return nil, fmt.Errorf("%w: synthesized source %s missing for node %s", ErrInvalidSnapshot, sourceID, node.ID)
-			}
-		}
+		graph.events = append(graph.events, copyEvent(event))
 	}
 
-	if graph.headID != "" {
-		if _, exists := graph.nodes[graph.headID]; !exists {
-			return nil, fmt.Errorf("%w: head node %s missing", ErrInvalidSnapshot, graph.headID)
-		}
+	if !graph.started {
+		return nil, errors.New("event log missing session.start event")
 	}
 
-	if graph.terminalNodeID != "" {
-		if _, exists := graph.nodes[graph.terminalNodeID]; !exists {
-			return nil, fmt.Errorf("%w: terminal node %s missing", ErrInvalidSnapshot, graph.terminalNodeID)
-		}
-	}
+	graph.eventNames = eventNames
 
 	return graph, nil
-}
-
-// UpgradeSnapshot converts an older snapshot schema to the current version.
-func UpgradeSnapshot(snapshot GraphSnapshot) (GraphSnapshot, error) {
-	version := snapshot.Version
-	if version == 0 {
-		return GraphSnapshot{}, fmt.Errorf("%w: snapshot version is required", ErrInvalidSnapshot)
-	}
-
-	for version < CurrentGraphSnapshotVersion {
-		upgrader, ok := snapshotUpgraders[version]
-		if !ok {
-			return GraphSnapshot{}, fmt.Errorf("%w: unsupported snapshot version %d", ErrInvalidSnapshot, version)
-		}
-
-		upgradedSnapshot, err := upgrader(snapshot)
-		if err != nil {
-			return GraphSnapshot{}, err
-		}
-
-		snapshot = upgradedSnapshot
-		version = snapshot.Version
-	}
-
-	if version != CurrentGraphSnapshotVersion {
-		return GraphSnapshot{}, fmt.Errorf("%w: unsupported snapshot version %d", ErrInvalidSnapshot, version)
-	}
-
-	return snapshot, nil
-}
-
-func (graph *Graph) snapshotNodes() []Node {
-	nodeIDs := make([]ID, 0, len(graph.nodes))
-	seen := make(map[ID]struct{}, len(graph.nodes))
-
-	for _, event := range graph.events {
-		if event.Node == nil {
-			continue
-		}
-
-		if _, exists := seen[event.Node.ID]; exists {
-			continue
-		}
-
-		seen[event.Node.ID] = struct{}{}
-		nodeIDs = append(nodeIDs, event.Node.ID)
-	}
-
-	if len(nodeIDs) != len(graph.nodes) {
-		missing := make([]string, 0, len(graph.nodes)-len(nodeIDs))
-		for nodeID := range graph.nodes {
-			if _, exists := seen[nodeID]; exists {
-				continue
-			}
-
-			missing = append(missing, string(nodeID))
-		}
-
-		sort.Strings(missing)
-		for _, nodeID := range missing {
-			nodeIDs = append(nodeIDs, ID(nodeID))
-		}
-	}
-
-	nodes := make([]Node, 0, len(nodeIDs))
-	for _, nodeID := range nodeIDs {
-		nodes = append(nodes, copyNode(graph.nodes[nodeID]))
-	}
-
-	return nodes
-}
-
-func eventKindFromName(eventNames EventNames, name string) EventKind {
-	switch name {
-	case eventNames.SessionStart:
-		return EventKindSessionStart
-	case eventNames.NodeAppended:
-		return EventKindNodeAppended
-	case eventNames.HistoryRewritten:
-		return EventKindHistoryRewritten
-	case eventNames.SessionEnded:
-		return EventKindSessionEnded
-	default:
-		return 0
-	}
 }

@@ -311,6 +311,58 @@ Events emitted:
 5. `session.ended` (sess-child, terminal_node_id: Z)
 6. `node.appended` D, E (parent)
 
+## Storage
+
+SGP defines a storage model based on the same append-only event stream the harness emits.
+Events are the source of truth; graphs are reconstructed by replaying them.
+
+### Store Interface
+
+Implementations must satisfy:
+
+```
+AppendEvent(ctx, sessionID, event) → error
+LoadEvents(ctx, sessionID)        → ([]Event, error)
+```
+
+`AppendEvent` appends a single event to the session's log. `LoadEvents` returns all events
+for a session in emission order. `LoadEvents` must return `ErrGraphNotFound` when no events
+have been recorded for the given session.
+
+The `Kind` field on `Event` is not serialised. Store implementations must restore it on
+every event returned by `LoadEvents` using `ClassifyEvent`, which determines the kind from
+field presence rather than event name strings. This makes restoration robust to custom event
+name configuration.
+
+### Event Classification
+
+Events are classified by field presence, in priority order:
+
+| Condition | Kind |
+| --- | --- |
+| `node` field present, `synthesized_from` non-empty | `history.rewritten` |
+| `node` field present | `node.appended` |
+| `reason` or `terminal_node_id` non-empty | `session.ended` |
+| none of the above | `session.start` |
+
+### Graph Reconstruction
+
+`RestoreFromEvents` replays an ordered event log to reconstruct an in-memory graph:
+
+1. `session.start` — initialises session metadata and marks the graph as started.
+2. `node.appended` / `history.rewritten` — inserts the node, rebuilds parent and child links,
+   advances HEAD.
+3. `session.ended` — marks the graph closed, records the terminal node and end reason.
+
+`EventNames` are inferred from observed event strings; any kind not yet seen defaults to the
+spec-defined names. This preserves custom event name configuration across restarts without
+requiring a separate metadata record.
+
+### Concurrency
+
+The Store interface makes no concurrency guarantees for writes to the same session. Callers
+must serialise concurrent `AppendEvent` calls for the same session ID.
+
 ## Properties And Guarantees
 
 | Property            | Guarantee                                                                                                                                                   |

@@ -1,6 +1,7 @@
 package jsonstore
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,7 +14,12 @@ import (
 	"github.com/restrukt-ai/sessiongraphprotocol/pkg/sgp"
 )
 
-// JSONFileStore persists one graph snapshot per JSON file on local disk.
+// JSONFileStore persists one JSONL event log per session on local disk.
+// Each event is written as a single JSON object on its own line. Events are
+// appended in emission order and never modified after writing.
+//
+// JSONFileStore is not safe for concurrent AppendEvent calls targeting the
+// same session. Callers must serialise writes per session.
 type JSONFileStore struct {
 	baseDir string
 }
@@ -29,87 +35,80 @@ func NewJSONFileStore(baseDir string) (*JSONFileStore, error) {
 	return &JSONFileStore{baseDir: baseDir}, nil
 }
 
-// Save writes a graph snapshot to local disk.
-func (store *JSONFileStore) Save(ctx context.Context, graph *sgp.Graph) error {
+// AppendEvent marshals event as a single JSON line and appends it to the
+// session's event log file. The file is created on the first append.
+func (store *JSONFileStore) AppendEvent(ctx context.Context, sessionID sgp.ID, event sgp.Event) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	if graph == nil {
-		return sgp.ErrNilGraph
-	}
-
-	snapshot := graph.Snapshot()
-	data, err := json.MarshalIndent(snapshot, "", "  ")
+	data, err := json.Marshal(event)
 	if err != nil {
-		return fmt.Errorf("marshal snapshot: %w", err)
+		return fmt.Errorf("marshal event: %w", err)
 	}
 
 	if err = os.MkdirAll(store.baseDir, 0o755); err != nil {
 		return fmt.Errorf("create base dir: %w", err)
 	}
 
-	filePath := store.pathForSession(snapshot.Session.ID)
-	tempFile, err := os.CreateTemp(store.baseDir, ".sgp-*.json")
+	f, err := os.OpenFile(store.pathForSession(sessionID), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return fmt.Errorf("create temp file: %w", err)
+		return fmt.Errorf("open session file: %w", err)
 	}
+	defer f.Close()
 
-	tempName := tempFile.Name()
-	defer func() {
-		_ = os.Remove(tempName)
-	}()
-
-	if _, err = tempFile.Write(data); err != nil {
-		_ = tempFile.Close()
-		return fmt.Errorf("write temp file: %w", err)
-	}
-
-	if err = tempFile.Close(); err != nil {
-		return fmt.Errorf("close temp file: %w", err)
-	}
-
-	if err = ctx.Err(); err != nil {
-		return err
-	}
-
-	if err = os.Rename(tempName, filePath); err != nil {
-		return fmt.Errorf("rename temp file: %w", err)
+	if _, err = fmt.Fprintf(f, "%s\n", data); err != nil {
+		return fmt.Errorf("write event: %w", err)
 	}
 
 	return nil
 }
 
-// Load reads a graph snapshot from local disk and restores it.
-func (store *JSONFileStore) Load(ctx context.Context, sessionID sgp.ID) (*sgp.Graph, error) {
+// LoadEvents reads all events for sessionID from the JSONL file in emission
+// order. Returns [sgp.ErrGraphNotFound] if no events have been recorded for
+// the session. The Kind field is restored on each event using
+// [sgp.ClassifyEvent].
+func (store *JSONFileStore) LoadEvents(ctx context.Context, sessionID sgp.ID) ([]sgp.Event, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	data, err := os.ReadFile(store.pathForSession(sessionID))
+	f, err := os.Open(store.pathForSession(sessionID))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("%w: %s", sgp.ErrGraphNotFound, sessionID)
 		}
+		return nil, fmt.Errorf("open session file: %w", err)
+	}
+	defer f.Close()
 
-		return nil, fmt.Errorf("read graph snapshot: %w", err)
+	var events []sgp.Event
+	scanner := bufio.NewScanner(f)
+	lineNum := 0
+	for scanner.Scan() {
+		lineNum++
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var event sgp.Event
+		if err = json.Unmarshal(line, &event); err != nil {
+			return nil, fmt.Errorf("parse event at line %d: %w", lineNum, err)
+		}
+
+		event.Kind = sgp.ClassifyEvent(event)
+		events = append(events, event)
 	}
 
-	var snapshot sgp.GraphSnapshot
-	if err = json.Unmarshal(data, &snapshot); err != nil {
-		return nil, fmt.Errorf("unmarshal graph snapshot: %w", err)
+	if err = scanner.Err(); err != nil {
+		return nil, fmt.Errorf("read session file: %w", err)
 	}
 
-	graph, err := sgp.RestoreGraph(snapshot)
-	if err != nil {
-		return nil, err
-	}
-
-	return graph, nil
+	return events, nil
 }
 
 func (store *JSONFileStore) pathForSession(sessionID sgp.ID) string {
 	encoded := url.PathEscape(string(sessionID))
-
-	return filepath.Join(store.baseDir, encoded+".json")
+	return filepath.Join(store.baseDir, encoded+".jsonl")
 }

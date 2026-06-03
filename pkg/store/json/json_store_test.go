@@ -2,7 +2,6 @@ package jsonstore
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -35,16 +34,17 @@ func TestNewJSONFileStoreRequiresBaseDir(t *testing.T) {
 	}
 }
 
-func TestJSONFileStoreSaveRejectsNilGraph(t *testing.T) {
+func TestJSONFileStoreLoadEventsNotFound(t *testing.T) {
 	t.Parallel()
 
 	store, err := NewJSONFileStore(t.TempDir())
 	if err != nil {
-		t.Fatalf("new json file store: %v", err)
+		t.Fatalf("new store: %v", err)
 	}
 
-	if err = store.Save(context.Background(), nil); !errors.Is(err, sgp.ErrNilGraph) {
-		t.Fatalf("expected ErrNilGraph, got %v", err)
+	_, err = store.LoadEvents(context.Background(), "no-such-session")
+	if !errors.Is(err, sgp.ErrGraphNotFound) {
+		t.Fatalf("expected ErrGraphNotFound, got %v", err)
 	}
 }
 
@@ -53,99 +53,24 @@ func TestJSONFileStoreHonorsCanceledContext(t *testing.T) {
 
 	store, err := NewJSONFileStore(t.TempDir())
 	if err != nil {
-		t.Fatalf("new json file store: %v", err)
+		t.Fatalf("new store: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	graph := sgp.NewGraph(sgp.WithIDGenerator(sequenceIDs("session-1", "node-a")))
-	if _, err = graph.Start(); err != nil {
+	graph := sgp.NewGraph(sgp.WithIDGenerator(sequenceIDs("s1", "n1")))
+	startEvent, err := graph.Start()
+	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
 
-	if _, _, err = graph.Append(sgp.Message{System: &sgp.SystemMessage{Text: "sys"}}); err != nil {
-		t.Fatalf("append root: %v", err)
+	if err = store.AppendEvent(ctx, graph.Session().ID, startEvent); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled from AppendEvent, got %v", err)
 	}
 
-	if err = store.Save(ctx, graph); !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context cancellation from save, got %v", err)
-	}
-
-	if _, err = store.Load(ctx, graph.Session().ID); !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context cancellation from load, got %v", err)
-	}
-}
-
-func TestJSONFileStoreWritesVersionedJSON(t *testing.T) {
-	t.Parallel()
-
-	baseDir := filepath.Join(t.TempDir(), "graphs")
-	store, err := NewJSONFileStore(baseDir)
-	if err != nil {
-		t.Fatalf("new json file store: %v", err)
-	}
-
-	graph := sgp.NewGraph(sgp.WithIDGenerator(sequenceIDs("session-1", "node-a")))
-	if _, err = graph.Start(); err != nil {
-		t.Fatalf("start: %v", err)
-	}
-
-	if _, _, err = graph.Append(sgp.Message{System: &sgp.SystemMessage{Text: "sys"}}); err != nil {
-		t.Fatalf("append root: %v", err)
-	}
-
-	if err = store.Save(context.Background(), graph); err != nil {
-		t.Fatalf("save graph: %v", err)
-	}
-
-	data, err := os.ReadFile(filepath.Join(baseDir, "session-1.json"))
-	if err != nil {
-		t.Fatalf("read saved graph: %v", err)
-	}
-
-	var snapshot sgp.GraphSnapshot
-	if err = json.Unmarshal(data, &snapshot); err != nil {
-		t.Fatalf("unmarshal saved snapshot: %v", err)
-	}
-
-	if got, want := snapshot.Version, uint32(sgp.CurrentGraphSnapshotVersion); got != want {
-		t.Fatalf("expected saved version %d, got %d", want, got)
-	}
-}
-
-func TestJSONFileStoreRejectsSnapshotWithoutVersion(t *testing.T) {
-	t.Parallel()
-
-	baseDir := t.TempDir()
-	store, err := NewJSONFileStore(baseDir)
-	if err != nil {
-		t.Fatalf("new json file store: %v", err)
-	}
-
-	snapshotWithoutVersion := sgp.GraphSnapshot{
-		Session: sgp.Session{ID: "legacy/session"},
-		Nodes: []sgp.Node{{
-			ID:        "node-a",
-			SessionID: "legacy/session",
-			Message:   sgp.Message{System: &sgp.SystemMessage{Text: "sys"}},
-		}},
-		Events: []sgp.Event{{Event: sgp.DefaultEventNames().SessionStart, SessionID: "legacy/session"}},
-		HeadID: "node-a",
-	}
-
-	data, err := json.MarshalIndent(snapshotWithoutVersion, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal snapshot without version: %v", err)
-	}
-
-	if err = os.WriteFile(filepath.Join(baseDir, "legacy%2Fsession.json"), data, 0o644); err != nil {
-		t.Fatalf("write snapshot without version: %v", err)
-	}
-
-	_, err = store.Load(context.Background(), "legacy/session")
-	if !errors.Is(err, sgp.ErrInvalidSnapshot) {
-		t.Fatalf("expected ErrInvalidSnapshot, got %v", err)
+	if _, err = store.LoadEvents(ctx, graph.Session().ID); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled from LoadEvents, got %v", err)
 	}
 }
 
@@ -154,32 +79,45 @@ func TestJSONFileStoreRoundTrip(t *testing.T) {
 
 	store, err := NewJSONFileStore(filepath.Join(t.TempDir(), "graphs"))
 	if err != nil {
-		t.Fatalf("new json file store: %v", err)
+		t.Fatalf("new store: %v", err)
 	}
 
-	graph := sgp.NewGraph(sgp.WithIDGenerator(sequenceIDs("session-1", "node-a", "node-b")))
-	if _, err = graph.Start(); err != nil {
+	graph := sgp.NewGraph(sgp.WithIDGenerator(sequenceIDs("s1", "n-sys", "n-user")))
+	startEvent, err := graph.Start()
+	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
 
-	root, _, err := graph.Append(sgp.Message{System: &sgp.SystemMessage{Text: "sys"}})
+	root, appendSys, err := graph.Append(sgp.Message{System: &sgp.SystemMessage{Text: "sys"}})
 	if err != nil {
 		t.Fatalf("append root: %v", err)
 	}
 
-	userNode, _, err := graph.Append(sgp.Message{User: &sgp.UserMessage{Parts: []sgp.ContentPart{{Text: &sgp.TextPart{Text: "hello"}}}}}, root.ID)
+	userNode, appendUser, err := graph.Append(
+		sgp.Message{User: &sgp.UserMessage{Parts: []sgp.ContentPart{{Text: &sgp.TextPart{Text: "hello"}}}}},
+		root.ID,
+	)
 	if err != nil {
 		t.Fatalf("append user: %v", err)
 	}
 
 	ctx := context.Background()
-	if err = store.Save(ctx, graph); err != nil {
-		t.Fatalf("save graph: %v", err)
+	sessionID := graph.Session().ID
+
+	for _, event := range []sgp.Event{startEvent, appendSys, appendUser} {
+		if err = store.AppendEvent(ctx, sessionID, event); err != nil {
+			t.Fatalf("append event: %v", err)
+		}
 	}
 
-	restored, err := store.Load(ctx, graph.Session().ID)
+	events, err := store.LoadEvents(ctx, sessionID)
 	if err != nil {
-		t.Fatalf("load graph: %v", err)
+		t.Fatalf("load events: %v", err)
+	}
+
+	restored, err := sgp.RestoreFromEvents(events)
+	if err != nil {
+		t.Fatalf("restore: %v", err)
 	}
 
 	needsResponse, err := restored.NeedsResponse(userNode.ID)
@@ -188,7 +126,7 @@ func TestJSONFileStoreRoundTrip(t *testing.T) {
 	}
 
 	if !needsResponse {
-		t.Fatal("expected persisted dangling user node to still require a response")
+		t.Fatal("expected dangling user node to require a response after restore")
 	}
 
 	messages, err := restored.ResumeMessages(userNode.ID)
@@ -201,65 +139,211 @@ func TestJSONFileStoreRoundTrip(t *testing.T) {
 	}
 }
 
-func TestJSONFileStoreMissingGraph(t *testing.T) {
+func TestJSONFileStoreEventsLoadedInAppendOrder(t *testing.T) {
 	t.Parallel()
 
 	store, err := NewJSONFileStore(t.TempDir())
 	if err != nil {
-		t.Fatalf("new json file store: %v", err)
+		t.Fatalf("new store: %v", err)
 	}
 
-	_, err = store.Load(context.Background(), "missing")
-	if !errors.Is(err, sgp.ErrGraphNotFound) {
-		t.Fatalf("expected ErrGraphNotFound, got %v", err)
+	graph := sgp.NewGraph(sgp.WithIDGenerator(sequenceIDs("s1", "n1", "n2", "n3")))
+	startEvent, err := graph.Start()
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	root, e1, err := graph.Append(sgp.Message{System: &sgp.SystemMessage{Text: "sys"}})
+	if err != nil {
+		t.Fatalf("append root: %v", err)
+	}
+	_, e2, err := graph.Append(sgp.Message{User: &sgp.UserMessage{Parts: []sgp.ContentPart{{Text: &sgp.TextPart{Text: "q"}}}}}, root.ID)
+	if err != nil {
+		t.Fatalf("append user: %v", err)
+	}
+	_, e3, err := graph.Append(sgp.Message{Assistant: &sgp.AssistantMessage{Parts: []sgp.ContentPart{{Text: &sgp.TextPart{Text: "a"}}}}}, root.ID)
+	if err != nil {
+		t.Fatalf("append asst: %v", err)
+	}
+
+	ctx := context.Background()
+	sessionID := graph.Session().ID
+
+	for _, event := range []sgp.Event{startEvent, e1, e2, e3} {
+		if err = store.AppendEvent(ctx, sessionID, event); err != nil {
+			t.Fatalf("append event: %v", err)
+		}
+	}
+
+	events, err := store.LoadEvents(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("load events: %v", err)
+	}
+
+	if got, want := len(events), 4; got != want {
+		t.Fatalf("expected %d events, got %d", want, got)
+	}
+
+	if got, want := events[0].Kind, sgp.EventKindSessionStart; got != want {
+		t.Fatalf("event[0] expected kind %d, got %d", want, got)
+	}
+
+	if got, want := events[1].Kind, sgp.EventKindNodeAppended; got != want {
+		t.Fatalf("event[1] expected kind %d, got %d", want, got)
 	}
 }
 
-func TestJSONFileStoreRejectsInvalidJSON(t *testing.T) {
+func TestJSONFileStoreKindRestoredOnLoad(t *testing.T) {
+	t.Parallel()
+
+	store, err := NewJSONFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	graph := sgp.NewGraph(sgp.WithIDGenerator(sequenceIDs("s1", "n1")))
+	startEvent, err := graph.Start()
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	root, nodeEvent, err := graph.Append(sgp.Message{System: &sgp.SystemMessage{Text: "sys"}})
+	if err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	endEvent, err := graph.End(sgp.EndReasonComplete)
+	if err != nil {
+		t.Fatalf("end: %v", err)
+	}
+
+	_ = root
+
+	ctx := context.Background()
+	sessionID := graph.Session().ID
+
+	for _, event := range []sgp.Event{startEvent, nodeEvent, endEvent} {
+		if err = store.AppendEvent(ctx, sessionID, event); err != nil {
+			t.Fatalf("append event: %v", err)
+		}
+	}
+
+	events, err := store.LoadEvents(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("load events: %v", err)
+	}
+
+	kinds := make([]sgp.EventKind, len(events))
+	for i, e := range events {
+		kinds[i] = e.Kind
+	}
+
+	expected := []sgp.EventKind{
+		sgp.EventKindSessionStart,
+		sgp.EventKindNodeAppended,
+		sgp.EventKindSessionEnded,
+	}
+
+	for i, want := range expected {
+		if got := kinds[i]; got != want {
+			t.Fatalf("event[%d] kind: expected %d, got %d", i, want, got)
+		}
+	}
+}
+
+func TestJSONFileStoreEndReasonPreservedOnLoad(t *testing.T) {
+	t.Parallel()
+
+	store, err := NewJSONFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	graph := sgp.NewGraph(sgp.WithIDGenerator(sequenceIDs("s1", "n1")))
+	startEvent, err := graph.Start()
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	if _, _, err = graph.Append(sgp.Message{System: &sgp.SystemMessage{Text: "sys"}}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	endEvent, err := graph.End(sgp.EndReasonFailed)
+	if err != nil {
+		t.Fatalf("end: %v", err)
+	}
+
+	ctx := context.Background()
+	sessionID := graph.Session().ID
+
+	for _, event := range []sgp.Event{startEvent, endEvent} {
+		if err = store.AppendEvent(ctx, sessionID, event); err != nil {
+			t.Fatalf("append event: %v", err)
+		}
+	}
+
+	events, err := store.LoadEvents(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("load events: %v", err)
+	}
+
+	var foundReason sgp.EndReason
+	for _, e := range events {
+		if e.Kind == sgp.EventKindSessionEnded {
+			foundReason = e.Reason
+		}
+	}
+
+	if got, want := foundReason, sgp.EndReasonFailed; got != want {
+		t.Fatalf("expected end reason %q, got %q", want, got)
+	}
+}
+
+func TestJSONFileStoreInvalidJSONLineReturnsError(t *testing.T) {
 	t.Parallel()
 
 	baseDir := t.TempDir()
 	store, err := NewJSONFileStore(baseDir)
 	if err != nil {
-		t.Fatalf("new json file store: %v", err)
+		t.Fatalf("new store: %v", err)
 	}
 
-	if err = os.WriteFile(filepath.Join(baseDir, "broken.json"), []byte("{not-json"), 0o644); err != nil {
-		t.Fatalf("write invalid json: %v", err)
+	// Write a valid first line then corrupt the second.
+	sessionID := sgp.ID("broken-session")
+	validLine := `{"event":"session.start","session_id":"broken-session","timestamp":"2025-01-01T00:00:00Z"}`
+	content := validLine + "\n{not-json}\n"
+
+	if err = os.WriteFile(filepath.Join(baseDir, "broken-session.jsonl"), []byte(content), 0o644); err != nil {
+		t.Fatalf("write test file: %v", err)
 	}
 
-	_, err = store.Load(context.Background(), "broken")
+	_, err = store.LoadEvents(context.Background(), sessionID)
 	if err == nil {
-		t.Fatal("expected invalid json load to fail")
+		t.Fatal("expected error for invalid JSON line, got nil")
 	}
 }
 
-func TestJSONFileStoreRejectsInvalidSnapshotFile(t *testing.T) {
+func TestJSONFileStoreCreatesBaseDirOnFirstAppend(t *testing.T) {
 	t.Parallel()
 
-	baseDir := t.TempDir()
+	baseDir := filepath.Join(t.TempDir(), "nested", "graphs")
 	store, err := NewJSONFileStore(baseDir)
 	if err != nil {
-		t.Fatalf("new json file store: %v", err)
+		t.Fatalf("new store: %v", err)
 	}
 
-	invalidSnapshot := sgp.GraphSnapshot{
-		Version: sgp.CurrentGraphSnapshotVersion,
-		Session: sgp.Session{ID: "broken"},
-		HeadID:  "missing",
-	}
-
-	data, err := json.Marshal(invalidSnapshot)
+	graph := sgp.NewGraph(sgp.WithIDGenerator(sequenceIDs("s1")))
+	startEvent, err := graph.Start()
 	if err != nil {
-		t.Fatalf("marshal invalid snapshot: %v", err)
+		t.Fatalf("start: %v", err)
 	}
 
-	if err = os.WriteFile(filepath.Join(baseDir, "broken.json"), data, 0o644); err != nil {
-		t.Fatalf("write invalid snapshot: %v", err)
+	if err = store.AppendEvent(context.Background(), graph.Session().ID, startEvent); err != nil {
+		t.Fatalf("append: %v", err)
 	}
 
-	_, err = store.Load(context.Background(), "broken")
-	if !errors.Is(err, sgp.ErrInvalidSnapshot) {
-		t.Fatalf("expected ErrInvalidSnapshot, got %v", err)
+	if _, err = os.Stat(baseDir); err != nil {
+		t.Fatalf("expected base dir to be created, got %v", err)
 	}
 }

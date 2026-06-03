@@ -241,6 +241,10 @@ func (graph *Graph) Rewrite(message Message, parentID ID, synthesizedFrom ...ID)
 // and [ErrSessionClosed] if End has already been called. terminal_node_id in the
 // emitted event is empty when End is called on a started graph with no nodes.
 func (graph *Graph) End(reason EndReason) (Event, error) {
+	if reason != EndReasonComplete && reason != EndReasonFailed {
+		return Event{}, fmt.Errorf("invalid end reason %q: must be %q or %q", reason, EndReasonComplete, EndReasonFailed)
+	}
+
 	graph.mu.Lock()
 	defer graph.mu.Unlock()
 
