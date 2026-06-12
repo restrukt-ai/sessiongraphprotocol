@@ -1,0 +1,110 @@
+syntax = "proto3";
+package sgp.v1;
+option go_package = "github.com/restrukt-ai/sessiongraphprotocol/gen/sgp/v1;sgpv1";
+
+import "google/protobuf/timestamp.proto";
+
+message TextPart   { string text = 1; }
+message BlobPart   { string mime_type = 1; bytes data = 2; }
+message ImagePart  { BlobPart blob = 1; }
+message AudioPart  { BlobPart blob = 1; }
+message VideoPart  { BlobPart blob = 1; }
+message FilePart   { BlobPart blob = 1; string name = 2; }
+
+message ContentPart {
+  oneof part {
+    TextPart  text  = 1;
+    ImagePart image = 2;
+    AudioPart audio = 3;
+    VideoPart video = 4;
+    FilePart  file  = 5;
+  }
+}
+
+message ToolCall {
+  string id        = 1;
+  string name      = 2;
+  string arguments = 3;  // raw JSON string
+}
+
+message SystemMessage    { string text = 1; }
+message UserMessage      { repeated ContentPart parts = 1; }
+message AssistantMessage {
+  repeated ContentPart parts      = 1;
+  repeated ToolCall    tool_calls = 2;
+  string               refusal    = 3;
+}
+message ToolMessage {
+  string               tool_call_id = 1;
+  string               name         = 2;
+  repeated ContentPart parts        = 3;
+  bool                 is_error     = 4;
+}
+
+message Message {
+  oneof message {
+    SystemMessage    system    = 1;
+    UserMessage      user      = 2;
+    AssistantMessage assistant = 3;
+    ToolMessage      tool      = 4;
+  }
+}
+
+message Node {
+  string                    id               = 1;
+  string                    session_id       = 2;
+  google.protobuf.Timestamp timestamp        = 3;
+  repeated string           parent_ids       = 4;
+  repeated string           synthesized_from = 5;
+  Message                   message          = 6;
+}
+
+message SpawnReference {
+  string session_id = 1;
+  string node_id    = 2;
+}
+
+message Session {
+  string                    id           = 1;
+  google.protobuf.Timestamp timestamp    = 2;
+  SpawnReference            spawned_from = 3;  // omitted for root sessions
+}
+
+enum EndReason {
+  END_REASON_UNSPECIFIED = 0;
+  END_REASON_COMPLETE    = 1;
+  END_REASON_FAILED      = 2;
+}
+
+enum SessionStatus {
+  SESSION_STATUS_UNSPECIFIED = 0;
+  SESSION_STATUS_OPEN        = 1;
+  SESSION_STATUS_CLOSED      = 2;
+}
+
+// Raw SGP event envelope (matches wire format)
+message Event {
+  string                    event            = 1;  // event name string
+  string                    session_id       = 2;
+  google.protobuf.Timestamp timestamp        = 3;
+  SpawnReference            spawned_from     = 4;
+  Node                      node             = 5;
+  string                    terminal_node_id = 6;
+  EndReason                 reason           = 7;
+}
+
+// Richer observation for WatchSession: event + derived graph state
+message SessionObservation {
+  Event         event        = 1;
+  string        head_node_id = 2;  // current HEAD after this event
+  SessionStatus status       = 3;  // OPEN or CLOSED
+  EndReason     end_reason   = 4;  // set when CLOSED
+  int32         node_count   = 5;  // total nodes in session graph
+}
+
+// Directed edge between nodes for graph visualization
+message NodeEdge {
+  string from_id = 1;
+  string to_id   = 2;
+  string kind    = 3;  // "parent" | "synthesized_from" | "spawned_from"
+}

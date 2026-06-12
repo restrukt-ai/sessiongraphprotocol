@@ -1,0 +1,50 @@
+syntax = "proto3";
+package sgp.v1;
+option go_package = "github.com/restrukt-ai/sessiongraphprotocol/gen/sgp/v1;sgpv1";
+
+import "sgp/v1/types.proto";
+
+service SGPManagementService {
+  rpc ListSessions     (ListSessionsRequest)    returns (ListSessionsResponse);
+  rpc GetSession       (GetSessionRequest)       returns (GetSessionResponse);
+  rpc GetNode          (GetNodeRequest)          returns (GetNodeResponse);
+  rpc GetResumeContext (GetResumeContextRequest) returns (GetResumeContextResponse);
+  rpc GetSessionGraph  (GetSessionGraphRequest)  returns (GetSessionGraphResponse);
+  rpc WatchSession     (WatchSessionRequest)     returns (stream SessionObservation);
+}
+
+message ListSessionsRequest {
+  int32  limit      = 1;  // default 50
+  string page_token = 2;  // opaque cursor = last seen session_id for keyset pagination
+}
+message ListSessionsResponse {
+  repeated Session sessions        = 1;
+  string           next_page_token = 2;  // empty when no more pages
+}
+
+message GetSessionRequest  { string session_id = 1; }
+message GetSessionResponse {
+  Session       session      = 1;
+  string        head_node_id = 2;
+  SessionStatus status       = 3;
+}
+
+message GetNodeRequest  { string node_id = 1; }
+message GetNodeResponse { Node   node    = 1; }
+
+message GetResumeContextRequest  { string node_id = 1; }
+message GetResumeContextResponse {
+  repeated Node    nodes    = 1;
+  repeated Message messages = 2;
+}
+
+message GetSessionGraphRequest  { string session_id = 1; }
+message GetSessionGraphResponse {
+  repeated Node     nodes = 1;
+  repeated NodeEdge edges = 2;
+}
+
+message WatchSessionRequest {
+  string session_id     = 1;
+  bool   replay_history = 2;
+}

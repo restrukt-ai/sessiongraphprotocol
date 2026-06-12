@@ -1,0 +1,16 @@
+syntax = "proto3";
+package sgp.v1;
+option go_package = "github.com/restrukt-ai/sessiongraphprotocol/gen/sgp/v1;sgpv1";
+
+import "sgp/v1/types.proto";
+
+service SGPHarnessService {
+  rpc AppendEvent(AppendEventRequest) returns (AppendEventResponse);
+  rpc LoadEvents(LoadEventsRequest)   returns (LoadEventsResponse);
+}
+
+message AppendEventRequest  { string session_id = 1; Event event = 2; }
+message AppendEventResponse {}
+
+message LoadEventsRequest   { string session_id = 1; }
+message LoadEventsResponse  { repeated Event events = 1; }
