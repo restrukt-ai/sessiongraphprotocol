@@ -79,23 +79,19 @@ func (s *PGStore) AppendEvent(ctx context.Context, sessionID sgp.ID, event sgp.E
 func (s *PGStore) applyAGE(ctx context.Context, tx pgx.Tx, sessionID sgp.ID, event sgp.Event) error {
 	switch event.Kind {
 	case sgp.EventKindSessionStart:
+		sid := escapeSingleQuotes(string(sessionID))
+		ts := escapeSingleQuotes(event.Timestamp.Format(time.RFC3339))
 		if err := execCypher(ctx, tx,
-			`CREATE (:Session {id: $id, timestamp: $ts})`,
-			map[string]any{
-				"id": string(sessionID),
-				"ts": event.Timestamp.Format(time.RFC3339),
-			}); err != nil {
+			fmt.Sprintf(`CREATE (:Session {id: '%s', timestamp: '%s'})`, sid, ts),
+		); err != nil {
 			return err
 		}
 		if event.SpawnedFrom != nil {
-			// Link new session to the parent node it was spawned from.
-			if err := execCypher(ctx, tx, `
-				MATCH (sess:Session {id: $sessID}), (n:Node {id: $nodeID})
-				CREATE (sess)-[:SPAWNED_FROM]->(n)`,
-				map[string]any{
-					"sessID": string(sessionID),
-					"nodeID": string(event.SpawnedFrom.NodeID),
-				}); err != nil {
+			nodeID := escapeSingleQuotes(string(event.SpawnedFrom.NodeID))
+			if err := execCypher(ctx, tx, fmt.Sprintf(`
+				MATCH (sess:Session {id: '%s'}), (n:Node {id: '%s'})
+				CREATE (sess)-[:SPAWNED_FROM]->(n)`, sid, nodeID),
+			); err != nil {
 				return err
 			}
 		}
@@ -105,28 +101,29 @@ func (s *PGStore) applyAGE(ctx context.Context, tx pgx.Tx, sessionID sgp.ID, eve
 		if n == nil {
 			return nil
 		}
+		nid := escapeSingleQuotes(string(n.ID))
+		nsid := escapeSingleQuotes(string(n.SessionID))
+		role := escapeSingleQuotes(string(n.Message.Role()))
 		if err := execCypher(ctx, tx,
-			`CREATE (:Node {id: $id, session_id: $sid, role: $role})`,
-			map[string]any{
-				"id":   string(n.ID),
-				"sid":  string(n.SessionID),
-				"role": string(n.Message.Role()),
-			}); err != nil {
+			fmt.Sprintf(`CREATE (:Node {id: '%s', session_id: '%s', role: '%s'})`, nid, nsid, role),
+		); err != nil {
 			return err
 		}
 		for _, parentID := range n.ParentIDs {
-			if err := execCypher(ctx, tx, `
-				MATCH (child:Node {id: $cid}), (parent:Node {id: $pid})
-				CREATE (child)-[:PARENT]->(parent)`,
-				map[string]any{"cid": string(n.ID), "pid": string(parentID)}); err != nil {
+			pid := escapeSingleQuotes(string(parentID))
+			if err := execCypher(ctx, tx, fmt.Sprintf(`
+				MATCH (child:Node {id: '%s'}), (parent:Node {id: '%s'})
+				CREATE (child)-[:PARENT]->(parent)`, nid, pid),
+			); err != nil {
 				return err
 			}
 		}
 		for _, srcID := range n.SynthesizedFrom {
-			if err := execCypher(ctx, tx, `
-				MATCH (child:Node {id: $cid}), (src:Node {id: $sid})
-				CREATE (child)-[:SYNTHESIZED_FROM]->(src)`,
-				map[string]any{"cid": string(n.ID), "sid": string(srcID)}); err != nil {
+			srid := escapeSingleQuotes(string(srcID))
+			if err := execCypher(ctx, tx, fmt.Sprintf(`
+				MATCH (child:Node {id: '%s'}), (src:Node {id: '%s'})
+				CREATE (child)-[:SYNTHESIZED_FROM]->(src)`, nid, srid),
+			); err != nil {
 				return err
 			}
 		}
@@ -205,16 +202,17 @@ func (s *PGStore) LoadEventsWithSeq(ctx context.Context, sessionID sgp.ID) ([]Ev
 // GetResumeContext returns the canonical lineage (root → nodeID) by traversing
 // PARENT edges in AGE, then hydrating nodes from the event log.
 func (s *PGStore) GetResumeContext(ctx context.Context, nodeID sgp.ID) ([]sgp.Node, error) {
+	nid := escapeSingleQuotes(string(nodeID))
 	// AGE traversal: walk PARENT edges from nodeID up to root, return IDs root→node.
-	rows, err := s.pool.Query(ctx, `
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT id::text
-		FROM ag_catalog.cypher('sgp', $$
-			MATCH p = (n:Node {id: $nodeID})-[:PARENT*0..]->(root:Node)
+		FROM cypher('sgp', $$
+			MATCH p = (n:Node {id: '%s'})-[:PARENT*0..]->(root:Node)
 			WHERE NOT EXISTS { MATCH (root)-[:PARENT]->() }
 			UNWIND reverse([x IN nodes(p) | x.id]) AS id
 			RETURN id
-		$$, $1) AS (id ag_catalog.agtype)
-	`, fmt.Sprintf(`{"nodeID": %q}`, string(nodeID)))
+		$$) AS (id agtype)
+	`, nid))
 	if err != nil {
 		return nil, fmt.Errorf("age lineage query: %w", err)
 	}
@@ -297,13 +295,14 @@ func (s *PGStore) loadSessionNodes(ctx context.Context, sessionID sgp.ID) ([]sgp
 }
 
 func (s *PGStore) loadSessionEdges(ctx context.Context, sessionID sgp.ID) ([]Edge, error) {
-	rows, err := s.pool.Query(ctx, `
+	sid := escapeSingleQuotes(string(sessionID))
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT from_id::text, to_id::text, kind::text
-		FROM ag_catalog.cypher('sgp', $$
-			MATCH (a:Node {session_id: $sid})-[e]->(b:Node)
+		FROM cypher('sgp', $$
+			MATCH (a:Node {session_id: '%s'})-[e]->(b:Node)
 			RETURN a.id AS from_id, b.id AS to_id, type(e) AS kind
-		$$, $1) AS (from_id ag_catalog.agtype, to_id ag_catalog.agtype, kind ag_catalog.agtype)
-	`, fmt.Sprintf(`{"sid": %q}`, string(sessionID)))
+		$$) AS (from_id agtype, to_id agtype, kind agtype)
+	`, sid))
 	if err != nil {
 		return nil, fmt.Errorf("age edge query: %w", err)
 	}

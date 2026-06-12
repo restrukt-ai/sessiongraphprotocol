@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: apache/age:latest   # PG18 + Apache AGE
+    environment:
+      POSTGRES_USER: sgpd
+      POSTGRES_PASSWORD: sgpd
+      POSTGRES_DB: sgpd
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sgpd -d sgpd"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  sgpd:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      SGPD_DATABASE_URL: "postgres://sgpd:sgpd@postgres:5432/sgpd"
+      SGPD_HARNESS_ADDR: ":9090"
+      SGPD_HARNESS_TOKEN: "dev-harness-token"
+      SGPD_MANAGEMENT_ADDR: ":9091"
+      SGPD_MANAGEMENT_TOKEN: "dev-management-token"
+      # TLS omitted → plain HTTP on both listeners (dev mode)
+    ports:
+      - "9090:9090"
+      - "9091:9091"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  pgdata:

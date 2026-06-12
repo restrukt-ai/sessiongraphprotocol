@@ -36,12 +36,7 @@ func loadConfig() (config, error) {
 	if cfg.ManagementToken == "" {
 		errs = append(errs, errors.New("SGPD_MANAGEMENT_TOKEN is required"))
 	}
-	if cfg.TLSCert == "" {
-		errs = append(errs, errors.New("SGPD_TLS_CERT is required"))
-	}
-	if cfg.TLSKey == "" {
-		errs = append(errs, errors.New("SGPD_TLS_KEY is required"))
-	}
+	// TLS is optional: omit cert/key for plain HTTP (dev only).
 	return cfg, errors.Join(errs...)
 }
 

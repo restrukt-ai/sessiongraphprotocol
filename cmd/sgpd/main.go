@@ -12,6 +12,8 @@ import (
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 
 	"github.com/restrukt-ai/sessiongraphprotocol/gen/sgp/v1/sgpv1connect"
 	pg "github.com/restrukt-ai/sessiongraphprotocol/pkg/store/pg"
@@ -48,8 +50,8 @@ func run() error {
 	}
 	defer pool.Close()
 
-	// Migrations (uses a separate *sql.DB, not the pool).
-	if err := pg.Migrate(ctx, cfg.DatabaseURL); err != nil {
+	// Migrations (SQL via goose + AGE graph init via pool).
+	if err := pg.Migrate(ctx, cfg.DatabaseURL, pool); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
 
@@ -73,13 +75,9 @@ func run() error {
 	hMux := http.NewServeMux()
 	hMux.Handle(sgpv1connect.NewSGPHarnessServiceHandler(&harnessHandler{store: store}, harnessOpts...))
 
-	var hProtos http.Protocols
-	hProtos.SetHTTP1(true)
-	hProtos.SetHTTP2(true)
 	hServer := &http.Server{
-		Addr:      cfg.HarnessAddr,
-		Handler:   hMux,
-		Protocols: &hProtos,
+		Addr:    cfg.HarnessAddr,
+		Handler: h2c.NewHandler(hMux, &http2.Server{}),
 	}
 	go func() {
 		slog.Info("harness listener", "addr", cfg.HarnessAddr)
@@ -98,9 +96,15 @@ func run() error {
 		Handler: mMux,
 	}
 	go func() {
-		slog.Info("management listener", "addr", cfg.ManagementAddr)
-		if err := mServer.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey); err != nil && err != http.ErrServerClosed {
-			slog.Error("management server", "err", err)
+		slog.Info("management listener", "addr", cfg.ManagementAddr, "tls", cfg.TLSCert != "")
+		var serveErr error
+		if cfg.TLSCert != "" && cfg.TLSKey != "" {
+			serveErr = mServer.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey)
+		} else {
+			serveErr = mServer.ListenAndServe()
+		}
+		if serveErr != nil && serveErr != http.ErrServerClosed {
+			slog.Error("management server", "err", serveErr)
 		}
 	}()
 

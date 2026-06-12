@@ -2,24 +2,26 @@ package pg
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
 )
 
-// execCypher executes a Cypher query against the 'sgp' AGE graph via the
-// ag_catalog.cypher() SQL function. params is serialised to JSON and passed
-// as the third argument to cypher().
-func execCypher(ctx context.Context, tx pgx.Tx, cypher string, params map[string]any) error {
-	paramsJSON, err := json.Marshal(params)
+// execCypher executes a Cypher query against the 'sgp' AGE graph.
+// The cypher string is embedded directly as a dollar-quoted literal, which
+// is what AGE requires. Callers must not include $$ in the cypher string.
+// Since all Cypher calls in this package are hardcoded (not user-supplied),
+// string interpolation via fmt.Sprintf is safe for the parameter values.
+//
+// search_path = ag_catalog must already be set on the connection; the pgxpool
+// AfterConnect hook and the migration both ensure this.
+func execCypher(ctx context.Context, tx pgx.Tx, cypher string) error {
+	sql := `SELECT * FROM cypher('sgp', $$ ` + cypher + ` $$) AS (result agtype)`
+	_, err := tx.Exec(ctx, sql)
 	if err != nil {
-		return fmt.Errorf("marshal cypher params: %w", err)
+		return fmt.Errorf("cypher %q: %w", cypher, err)
 	}
-	_, err = tx.Exec(ctx,
-		`SELECT * FROM ag_catalog.cypher('sgp', $1, $2) AS (result ag_catalog.agtype)`,
-		cypher, string(paramsJSON))
-	return err
+	return nil
 }
 
 // stripAgtypeQuotes removes the surrounding double-quotes that AGE adds to
@@ -29,4 +31,17 @@ func stripAgtypeQuotes(s string) string {
 		return s[1 : len(s)-1]
 	}
 	return s
+}
+
+// escapeSingleQuotes escapes single quotes for safe embedding in Cypher strings.
+func escapeSingleQuotes(s string) string {
+	out := make([]byte, 0, len(s)+4)
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\'' {
+			out = append(out, '\\', '\'')
+		} else {
+			out = append(out, s[i])
+		}
+	}
+	return string(out)
 }
