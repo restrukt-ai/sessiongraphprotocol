@@ -73,6 +73,17 @@ tasks:
     cmds:
       - rm -rf {{.BIN_DIR}}
 
+  sqlc:generate:
+    desc: Regenerate sqlc query code
+    cmds:
+      - sqlc generate
+    sources:
+      - sqlc.yaml
+      - pkg/store/pg/schema/schema.sql
+      - pkg/store/pg/queries/queries.sql
+    generates:
+      - pkg/store/pg/sqlcdb/*.go
+
   hooks:install:
     desc: Install lefthook commit hooks
     cmds:

@@ -1,63 +1,36 @@
+// Package pg implements the PostgreSQL-backed SGP store.
 package pg
 
 import (
 	"context"
-	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver for pgx
-	"github.com/pressly/goose/v3"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres" // registers postgres:// URL driver
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
-// Migrate runs all pending goose SQL migrations, then creates the AGE 'sgp'
-// graph via the pgx pool (which has AGE loaded on every connection).
-func Migrate(ctx context.Context, databaseURL string, pool *pgxpool.Pool) error {
-	// 1. SQL migrations via goose (uses pgx stdlib driver).
-	db, err := sql.Open("pgx", databaseURL)
+// Migrate runs all pending migrations using the embedded migration files.
+func Migrate(_ context.Context, databaseURL string) error {
+	src, err := iofs.New(migrationsFS, "migrations")
 	if err != nil {
-		return fmt.Errorf("open migration db: %w", err)
-	}
-	defer db.Close()
-
-	goose.SetBaseFS(migrationsFS)
-
-	err = goose.SetDialect("postgres")
-	if err != nil {
-		return fmt.Errorf("goose dialect: %w", err)
+		return fmt.Errorf("iofs source: %w", err)
 	}
 
-	err = goose.Up(db, "migrations")
+	m, err := migrate.NewWithSourceInstance("iofs", src, databaseURL)
 	if err != nil {
-		return fmt.Errorf("goose up: %w", err)
+		return fmt.Errorf("new migrator: %w", err)
 	}
+	defer m.Close()
 
-	// 2. Create the AGE graph via pgx pool. Every pool connection runs
-	//    LOAD 'age' in AfterConnect, making ag_catalog available.
-	conn, err := pool.Acquire(ctx)
-	if err != nil {
-		return fmt.Errorf("acquire conn for age graph: %w", err)
-	}
-	defer conn.Release()
-
-	var count int
-
-	err = conn.QueryRow(ctx,
-		`SELECT count(*) FROM ag_catalog.ag_graph WHERE name = 'sgp'`,
-	).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("check age graph: %w", err)
-	}
-
-	if count == 0 {
-		_, err = conn.Exec(ctx, `SELECT ag_catalog.create_graph('sgp')`)
-		if err != nil {
-			return fmt.Errorf("create age graph: %w", err)
-		}
+	err = m.Up()
+	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("migrate up: %w", err)
 	}
 
 	return nil

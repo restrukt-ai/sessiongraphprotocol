@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -74,26 +73,13 @@ func run(cfg config) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Pool: every connection installs AGE.
-	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
-	if err != nil {
-		return fmt.Errorf("parse database url: %w", err)
-	}
-
-	poolCfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
-		_, err := conn.Exec(ctx, `LOAD 'age'; SET search_path = ag_catalog, "$user", public`)
-
-		return err
-	}
-
-	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("create pool: %w", err)
 	}
 	defer pool.Close()
 
-	// Migrations (SQL via goose + AGE graph init via pool).
-	err = pg.Migrate(ctx, cfg.DatabaseURL, pool)
+	err = pg.Migrate(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}

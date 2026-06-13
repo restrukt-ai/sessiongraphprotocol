@@ -1,0 +1,14 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "pkg/store/pg/queries/queries.sql"
+    schema: "pkg/store/pg/schema/schema.sql"
+    gen:
+      go:
+        package: "sqlcdb"
+        out: "pkg/store/pg/sqlcdb"
+        sql_package: "pgx/v5"
+        emit_empty_slices: true
+        overrides:
+          - db_type: "jsonb"
+            go_type: "encoding/json.RawMessage"

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/restrukt-ai/sessiongraphprotocol/pkg/sgp"
+	"github.com/restrukt-ai/sessiongraphprotocol/pkg/store/pg/sqlcdb"
 )
 
 // Observation is the internal live-event type delivered to WatchSession subscribers.
@@ -41,7 +42,7 @@ type subscriber struct {
 // notifications and fan them out to in-process subscribers.
 type NotifyBroker struct {
 	conn     *pgx.Conn
-	pool     *pgxpool.Pool
+	queries  *sqlcdb.Queries
 	mu       sync.RWMutex
 	subs     map[string][]subscriber
 	listened map[string]struct{}
@@ -61,7 +62,7 @@ func NewNotifyBroker(
 
 	return &NotifyBroker{
 		conn:     conn,
-		pool:     pool,
+		queries:  sqlcdb.New(pool),
 		subs:     make(map[string][]subscriber),
 		listened: make(map[string]struct{}),
 	}, nil
@@ -163,11 +164,10 @@ func (b *NotifyBroker) fetchObservation(
 	sessionID string,
 	seq int64,
 ) (Observation, error) {
-	var eventJSON []byte
-
-	err := b.pool.QueryRow(ctx,
-		`SELECT event_json FROM sgp_events WHERE session_id = $1 AND seq = $2`,
-		sessionID, seq).Scan(&eventJSON)
+	eventJSON, err := b.queries.FetchEventBySeq(ctx, sqlcdb.FetchEventBySeqParams{
+		SessionID: sessionID,
+		Seq:       seq,
+	})
 	if err != nil {
 		return Observation{}, fmt.Errorf("fetch observation event: %w", err)
 	}
@@ -199,10 +199,7 @@ func (b *NotifyBroker) fetchObservation(
 		obs.Status = SessionStatusOpen
 	}
 
-	var count int32
-	b.pool.QueryRow(ctx,
-		`SELECT count(*) FROM sgp_events WHERE session_id = $1 AND event_json ? 'node'`,
-		sessionID).Scan(&count) //nolint:errcheck
+	count, _ := b.queries.CountNodesBySession(ctx, sessionID) //nolint:errcheck
 	obs.NodeCount = count
 
 	return obs, nil
